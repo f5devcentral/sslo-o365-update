@@ -9,7 +9,7 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 ### How to install 
 - Download the script onto the F5 BIG-IP:
 
-  `curl -k https://raw.githubusercontent.com/f5devcentral/sslo_o365_update/main/sslo_o365_update.py -o sslo_o365_update.py`
+  `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/main/sslo_o365_update.py -o sslo_o365_update.py`
 
 - Run the script with the *--install* option and a time interval. The time interval controls periodic updates, in seconds. Microsoft publishes the endpoint data at the beginning of each month, so any time interval between 3600 (1 hour) and 604800 (1 week) is optimal. The endpoint version number is tracked internally, so a full URL download will only happen if this value changes. Otherwise the periodic script call will simply check and compare the latest version number.
 
