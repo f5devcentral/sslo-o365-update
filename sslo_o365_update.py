@@ -1,8 +1,8 @@
 #!/bin/python
 # -*- coding: utf-8 -*-
 # O365 URL/IP update automation for BIG-IP
-version = "7.1.2"
-# Last Modified: October 2020
+version = "7.1.3"
+# Last Modified: January 2021
 # Update author: Kevin Stewart, Sr. SSA F5 Networks
 # Contributors: Regan Anderson, Brett Smith, F5 Networks
 # Original author: Makoto Omura, F5 Networks Japan G.K.
@@ -10,6 +10,7 @@ version = "7.1.2"
 # >>> NOTE: THIS VERSION OF THE OFFICE 365 SCRIPT IS SUPPORTED BY SSL ORCHESTRATOR 6.0 OR HIGHER <<<
 #
 # Updated for SSL Orchestrator by Kevin Stewart, SSA, F5 Networks
+# Update 20210119 - added support for explicit proxy gateway (if required for Internet access)
 # Update 20201104 - resolved URL category format issue
 # Update 20201008 - to support additional enhancements by Kevin Stewart
 #   - Updated to support HA mode (both peers perform updates and do not an trigger out-of-sync)
@@ -35,7 +36,7 @@ version = "7.1.2"
 #
 # To install:
 #   - Download the script onto the F5 BIG-IP:
-#     curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/main/sslo_o365_update.py -o sslo_o365_update.py
+#     curl -k https://raw.githubusercontent.com/kevingstewart/sslo_o365_update/main/sslo_o365_update.py -o sslo_o365_update.py
 #
 #   - Run the script with the --install option and a time interval (the time interval controls periodic updates, in seconds - 3600sec = 1hr).
 #     python sslo_o365_update.py --install 3600
@@ -97,8 +98,7 @@ version = "7.1.2"
 #     "system":
 #         "force_refresh": true|false     -> Action if O365 endpoint list is not updated (a "fetch now" function)
 #         "log_level": 1                  -> 0=none, 1=normal, 2=verbose
-#         "ha_config": 0                  -> 0=stand alone, 1=HA paired
-#         "device_group": "device-group-1"-> Name of Sync-Failover Device Group.  Required for HA paired BIG-IP.
+#         "proxy": "none" or "ip:port"    -> IP and port of an upstream explicit proxy listener (if required for Internet access), or "none".
 #
 #
 #
@@ -202,8 +202,7 @@ def main():
     global excluded_ips
     global force_o365_record_refresh
     global log_level
-    global ha_config
-    global device_group
+    global proxy
     global force_update
 
     # Initialize force_update to false
@@ -278,8 +277,7 @@ def main():
             excluded_ips                = config_data["excluded_ips"]
             force_o365_record_refresh   = config_data["system"]["force_refresh"]
             log_level                   = config_data["system"]["log_level"]
-            ha_config                   = config_data["system"]["ha_config"]
-            device_group                = config_data["system"]["device_group"]
+            proxy                       = config_data["system"]["proxy"]
 
         except:
             print("\nIt appears the JSON configuration file is either missing or corrupt. Run the script again with the --install <time> option to repair.")
@@ -354,7 +352,14 @@ def main():
     # Read the version of previously received records. If different than stored information, then data is assumed new/changed
     request_string = uri_ms_o365_version + guid
     req_string = "https://" + url_ms_o365_version + request_string
-    res = urllib2.urlopen(req_string)
+
+    if proxy is not "none":
+        proxyctl = urllib2.ProxyHandler({'https': proxy})
+        opener = urllib2.build_opener(proxyctl)
+        urllib2.install_opener(opener)
+        res = urllib2.urlopen(req_string)
+    else:
+        res = urllib2.urlopen(req_string)
 
     if not res.getcode() == 200:
         # MS O365 version request failed - abort
@@ -395,7 +400,14 @@ def main():
     # Make the request to fetch JSON data from Microsoft
     request_string = "/endpoints/" + customer_endpoint + "?ClientRequestId=" + guid    
     req_string = "https://" + url_ms_o365_endpoints + request_string
-    res = urllib2.urlopen(req_string)
+
+    if proxy is not "none":
+        proxyctl = urllib2.ProxyHandler({'https': proxy})
+        opener = urllib2.build_opener(proxyctl)
+        urllib2.install_opener(opener)
+        res = urllib2.urlopen(req_string)
+    else:
+        res = urllib2.urlopen(req_string)
 
     if not res.getcode() == 200:
         # MS O365 endpoints request failed - abort
@@ -712,8 +724,7 @@ def script_install ():
         "system": {
             "force_refresh": False,
             "log_level": 1,
-            "ha_config": 0,
-            "device_group": "device-group-1"
+            "proxy": "none"
         }
     }
     # Serialize JSON data
