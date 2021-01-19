@@ -14,6 +14,8 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 - Run the script with the *--install* option and a time interval. The time interval controls periodic updates, in seconds. Microsoft publishes the endpoint data at the beginning of each month, so any time interval between 3600 (1 hour) and 604800 (1 week) is optimal. The endpoint version number is tracked internally, so a full URL download will only happen if this value changes. Otherwise the periodic script call will simply check and compare the latest version number.
 
   `python sslo_o365_update.py --install 3600`
+  
+  *Note: if updating to a new version, you must uninstall first, then install the new version*
 
 ### How to modify the configuration
 - Edit the configuration json file via interactive tmsh. Use standard VIM commands for editing.
@@ -97,10 +99,9 @@ The installed script creates a working directory (/shared/o365), a configuration
     system:
         force_refresh: true|false        -> Enable this to force the script to ignore the local endpoint version tracking and to alway download
         log_level: 1                     -> 0 = no logging, 1 = normal logging, 2 = verbose logging
-        ha_config: 0                     -> 0 = stand alone, 1 = HA paired
-        device_group: "device-group-1".  -> Name of Sync-Failover Device Group.  Required if "ha_config" is true (1).
+        proxy: "none" or "ip:port"       -> IP and port of upstream explicit proxy gateway (if required for Internet access), or "none"
    
- 
+   
 ---
 
 **Extra**
