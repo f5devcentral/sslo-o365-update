@@ -1,7 +1,7 @@
 #!/bin/python
 # -*- coding: utf-8 -*-
 # O365 URL/IP update automation for BIG-IP
-version = "7.1.3"
+version = "7.1.4"
 # Last Modified: January 2021
 # Update author: Kevin Stewart, Sr. SSA F5 Networks
 # Contributors: Regan Anderson, Brett Smith, F5 Networks
@@ -10,6 +10,7 @@ version = "7.1.3"
 # >>> NOTE: THIS VERSION OF THE OFFICE 365 SCRIPT IS SUPPORTED BY SSL ORCHESTRATOR 6.0 OR HIGHER <<<
 #
 # Updated for SSL Orchestrator by Kevin Stewart, SSA, F5 Networks
+# Update 20210209 - Minor string comparison syntax update
 # Update 20210119 - added support for explicit proxy gateway (if required for Internet access)
 # Update 20201104 - resolved URL category format issue
 # Update 20201008 - to support additional enhancements by Kevin Stewart
@@ -353,7 +354,7 @@ def main():
     request_string = uri_ms_o365_version + guid
     req_string = "https://" + url_ms_o365_version + request_string
 
-    if proxy is not "none":
+    if proxy != "none":
         proxyctl = urllib2.ProxyHandler({'https': proxy})
         opener = urllib2.build_opener(proxyctl)
         urllib2.install_opener(opener)
@@ -401,7 +402,7 @@ def main():
     request_string = "/endpoints/" + customer_endpoint + "?ClientRequestId=" + guid    
     req_string = "https://" + url_ms_o365_endpoints + request_string
 
-    if proxy is not "none":
+    if proxy != "none":
         proxyctl = urllib2.ProxyHandler({'https': proxy})
         opener = urllib2.build_opener(proxyctl)
         urllib2.install_opener(opener)
