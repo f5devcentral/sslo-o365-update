@@ -45,6 +45,9 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 ### HA considerations
 - Perform the install operations on both units in an HA environment and then sync. The script runs independently on each peer and will not trigger an out-of-sync indication when updates are made.
 
+### Egress proxy considerations
+- The script uses system outbound proxy settings (System : Configuration : Device : Upstream Proxy).
+
 ---
 
 ### The configuration environment
@@ -124,7 +127,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
    
 ---
 
-***Default configuration***
+**Default configuration**
 ```json
 {
     "endpoint": "Worldwide",
@@ -177,3 +180,15 @@ The installed script creates a working directory (default: /shared/o365), a conf
     }
 }
 ```
+
+---
+
+**Improvements**
+- Update 7.2.1 - to support additional enhancements
+  - Updated to class-based Python script
+  - Updated to support --config (serialized JSON string input) and --configfile (JSON file) install options
+  - Updated to support --full_uninstall option to delete all configurations (local files, URL categories, datagroups)
+  - Updated to support --printconfig option to show the running configuration (JSON)
+  - Updated to support using system proxy settings (System : Configuration : Device : Upstream Proxy)
+  - Updated to support /etc/cron.d/0hourly scheduler (replaces iCall periodic) for more granular m/d/Y HH:mm scheduling
+  - Updated to support more comprehensive config input validation
