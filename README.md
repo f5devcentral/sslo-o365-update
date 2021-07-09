@@ -26,11 +26,11 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 ### How to modify the configuration
 - Initiate the `--install` process again with a new `--config` or `--configfile` argument.
 
-  See the JSON configuration template below. Anything passed into --config or --configfile must be in the correct JSON format. For example, to change on the endpoint:
+  See the JSON configuration template below. Anything passed into --config or --configfile must be in the correct JSON format. For example, to change only the endpoint value:
   
   `--install --config '{"endpoint": "Worldwide"}'`
   
-  To change the schedule frequency:
+  To change the schedule frequency (periods):
   
   `--install --config '{"schedule":{"periods":"monthly"}}'`
 
