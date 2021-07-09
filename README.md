@@ -33,6 +33,8 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   To change the schedule frequency (periods):
   
   `--install --config '{"schedule":{"periods":"monthly"}}'`
+  
+  Antying not specifically defined will take the default values.
 
 
 ### How to uninstall
