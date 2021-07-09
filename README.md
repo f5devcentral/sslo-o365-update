@@ -26,6 +26,14 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 ### How to modify the configuration
 - Initiate the `--install` process again with a new `--config` or `--configfile` argument.
 
+  See the JSON configuration template below. Anything passed into --config or --configfile must be in the correct JSON format. For example, to change on the endpoint:
+  
+  `--install --config '{"endpoint": "Worldwide"}'`
+  
+  To change the schedule frequency:
+  
+  `--install --config '{"schedule":{"periods":"monthly"}}'`
+
 
 ### How to uninstall
 - Run the script with the `--uninstall` option. This will remove the configuration file and scheduler. The URL categories, datagroups, and working directory will remain.
