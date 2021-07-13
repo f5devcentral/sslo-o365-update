@@ -14,7 +14,7 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 
   `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.1/sslo_o365_update.py -o sslo_o365_update.py`
 
-- Run the script with one of the following install options:
+- Run the script with one of the following install options. Note that the install options create or replace an existing configuration, but **will not** by itself initiate an O365 URL fetch. To force a fetch on install, include the `--force` option.
 
   - `python sslo_o365_update.py --install`  -- this option installs with the default configuration.
 
@@ -34,13 +34,8 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   
   `--install --config '{"schedule":{"periods":"monthly"}}'`
   
-  Antying not specifically defined will take the default values.
+  Anything not specifically defined will take the default values. See "default configuration" below.
 
-
-### How to uninstall
-- Run the script with the `--uninstall` option. This will remove the configuration file and scheduler. The URL categories, datagroups, and working directory will remain.
-
-- Run the script with the `--full_uninstall` option. This will remove the configurtion file, scheduler, working directory files, URL categories, and datagroups.
 
 ### How to force an update
 - Run the script with the `--force` option, either during install to immediately force a URL fetch, or at any time.
@@ -48,9 +43,19 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   `python sslo_o365_update.py --install --force`
   <br />
   `python sslo_o365_update.py --force`
+  
 
 ### Show the running configuration
 - Run the script with the `--printconfig` option to display the running configuration.
+
+  `python sslo_o365_update.py --printconfig`
+
+
+### How to uninstall
+- Run the script with the `--uninstall` option. This will remove the configuration file and scheduler. The URL categories, datagroups, and working directory will remain.
+
+- Run the script with the `--full_uninstall` option. This will remove the configurtion file, scheduler, working directory files, URL categories, and datagroups.
+
 
 ### HA considerations
 - Perform the install operations on both units in an HA environment and then sync. The script runs independently on each peer and will not trigger an out-of-sync indication when updates are made.
