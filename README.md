@@ -4,7 +4,7 @@ A small Python utility to download and maintain the dynamic set of Office 365 UR
 [![Releases](https://img.shields.io/github/v/release/f5devcentral/sslo-o365-update.svg)](https://github.com/f5devcentral/sslo-o365-update/releases)
 
 ### Script version
-7.2.1
+7.2.2
 
 ### SSL Orchestrator version support
 This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
@@ -12,7 +12,7 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 ### How to install 
 - Download the script onto the F5 BIG-IP:
 
-  `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.1/sslo_o365_update.py -o sslo_o365_update.py`
+  `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.2/sslo_o365_update.py -o sslo_o365_update.py`
 
 - Run the script with one of the following install options. Note that the install options create or replace an existing configuration, but **will not** by itself initiate an O365 URL fetch. To force a fetch on install, include the `--force` option.
 
@@ -89,8 +89,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "outputs":{
         "url_categories": True|False   -> Create URL categories
         "url_datagroups": True|False   -> Create URL data groups
-        "ip4_datagroups": True|False   -> Create IPv4 data groups
-        "ip6_datagroups": True|False   -> Create IPv6 data groups
+        "ip_datagroups":  True|False   -> Create IPv4 data groups
     }
 
 
@@ -127,15 +126,16 @@ The installed script creates a working directory (default: /shared/o365), a conf
 
     "system":{
         "log_level": 1                       -> 0 = no logging, 1 = normal logging, 2 = verbose logging
+        "ca_bundle": "ca-bundle.crt"         -> The CA certificate bundle to use for validating the remote server certificate
         "working_directory": "/shared/o365"  -> The working directory to install and run the script from
     }
    
 ***System-level configuration settings***
 
     "schedule":{
-        "periods":"monthly"                  -> The period, "monthly" or "weekly" to run the script
+        "periods":"none"                     -> The period, "monthly", "weekly", "daily", or "none" to run the script
         "run_date":1                         -> The day of the week for weekly (0-6 Sunday-Saturday), or day of the month for monthly (1-31) to run the script
-        "run_time":"04:00"                   -> The 24-hour time to run the script (ex. "04:00")
+        "run_time":"04:00"                   -> The 24-hour time to run the script (ex. "04:00") - required for daily/weekly/monthly
         "start_date":""                      -> A month/day/Year formatted date string (ex. 3/29/2021) to begin running the script
         "start_time":""                      -> A 24-hour time to start running the script (on the start_date)
     }
@@ -184,10 +184,11 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "excluded_ips": [],
     "system": {
         "log_level": 1,
+        "ca_bundle": "ca-bundle.crt",
         "working_directory": "/shared/o365"
     },
     "schedule":{
-        "periods":"monthly",
+        "periods":"none",
         "run_date":1,
         "run_time":"04:00",
         "start_date":"",
@@ -199,11 +200,13 @@ The installed script creates a working directory (default: /shared/o365), a conf
 ---
 
 **Improvements**
-- Update 7.2.1 - to support additional enhancements
-  - Updated to class-based Python script
-  - Updated to support --config (serialized JSON string input) and --configfile (JSON file) install options
-  - Updated to support --full_uninstall option to delete all configurations (local files, URL categories, datagroups)
-  - Updated to support --printconfig option to show the running configuration (JSON)
-  - Updated to support using system proxy settings (System : Configuration : Device : Upstream Proxy)
-  - Updated to support /etc/cron.d/0hourly scheduler (replaces iCall periodic) for more granular m/d/Y HH:mm scheduling
-  - Updated to support more comprehensive config input validation
+- Update 7.2.2 - to support additional enhancements
+   - Updated to address ip4/ip6 datagroup issue
+   - Updated to collapse IPv4 and IPv6 datagroup configuration into a single option (on/off)
+   - Updated to add 'none' option to schedule (no schedule)
+   - Updated to add 'daily' option to schedule
+   - Updated to add CA bundle selection for server certificate validation
+   - Updated to address url_included issue (was not adding urls)
+   - Updated to add last-run information fields in the configuration JSON
+   - Updated to add validation of O365 URL data response (in case of good response with no/bad data)
+   - Updated to add STDOUT messages for successful install, uninstall, force-update, and all errors
