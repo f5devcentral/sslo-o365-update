@@ -22,6 +22,7 @@ version = "7.2.2"
 #   - Updated to add last-run information fields in the configuration JSON
 #   - Updated to add validation of O365 URL data response (in case of good response with no/bad data)
 #   - Updated to add STDOUT messages for successful install, uninstall, force-update, and all errors
+#   - Updated to add [tag] for verbose messaging
 # Update 20210601 - to support additional enhancements (by Kevin Stewart)
 #   - Updated to class-based Python script
 #   - Updated to support --config (serialized JSON string input) and --configfile (JSON file) install options
@@ -313,7 +314,7 @@ class o365UrlManagement:
                 o365_config = max(entry_array, key=os.path.getctime)
         
             if o365_config == "":
-                print("\nIt appears this script has not been installed yet. Aborting (1000).\nTo install this script, issue the command \"" + os.path.basename(__file__) + " --install\"\n")
+                print("\nIt appears this script has not been installed yet. Aborting (1000).\n\n[help-info] To install this script, issue the command \"" + os.path.basename(__file__) + " --install\"\n")
                 self.show_help()
             
             try:
@@ -349,11 +350,11 @@ class o365UrlManagement:
                 self.schedule_start_time         = self.config_data["schedule"]["start_time"]
 
             except:
-                print("\nIt appears the JSON configuration file is either missing or corrupt. Aborting (1001).\nRun the script again with the --install option to repair.")
+                print("\nIt appears the JSON configuration file is either missing or corrupt. Aborting (1001).\n[error-info] Run the script again with the --install option to repair.")
                 self.show_help()
 
         except:
-            print("\nIt appears this script has not been installed yet. Aborting (1002).\nTo install this script, issue the command \"" + os.path.basename(__file__) + " --install\"\n")
+            print("\nIt appears this script has not been installed yet. Aborting (1002).\n\n[help-info] To install this script, issue the command \"" + os.path.basename(__file__) + " --install\"\n")
             self.show_help()
 
 
@@ -1007,12 +1008,12 @@ class o365UrlManagement:
             
             except urllib2.URLError as e:
                 self.log(1, self.log_level, "ERROR: Request to fetch O365 information failed. Aborting (1004): " + str(e.reason))
-                print("ERROR: Request to fetch O365 information failed. Aborting (1004): " + str(e.reason))
+                print("ERROR: Request to fetch O365 information failed. Aborting (1004): [error-info] " + str(e.reason))
                 sys.exit(0)
             
             except Exception as e:
                 self.log(1, self.log_level, "ERROR: Request to fetch O365 information failed. Aborting (1005): " + str(e))
-                print("ERROR: Request to fetch O365 information failed. Aborting (1005): " + str(e))
+                print("ERROR: Request to fetch O365 information failed. Aborting (1005): [error-info] " + str(e))
                 sys.exit(0)
 
             if res.getcode() != 200:
@@ -1027,7 +1028,7 @@ class o365UrlManagement:
                     self.log(2, self.log_level, "VERSION request to MS web service was successful.")
                 except Exception as e:
                     self.log(2, self.log_level, "Error: Good response but invalid (non-JSON) data encountered. Aborting (1007): " + str(e))
-                    print("Error: Good response but invalid (non-JSON) data encountered. Aborting (1007): " + str(e))
+                    print("Error: Good response but invalid (non-JSON) data encountered. Aborting (1007): [error-info] " + str(e))
                     sys.exit(0)
 
 
@@ -1076,12 +1077,12 @@ class o365UrlManagement:
 
             except urllib2.URLError as e:
                 self.log(1, self.log_level, "ERROR: Request to fetch O365 information failed. Aborting (1009): " + str(e.reason))
-                print("ERROR: Request to fetch O365 information failed. Aborting (1009): " + str(e.reason))
+                print("ERROR: Request to fetch O365 information failed. Aborting (1009): [error-info] " + str(e.reason))
                 sys.exit(0)
             
             except Exception as e:
                 self.log(1, self.log_level, "ERROR: Request to fetch O365 information failed. Aborting (1032): " + str(e))
-                print("ERROR: Request to fetch O365 information failed. Aborting (1032): " + str(e))
+                print("ERROR: Request to fetch O365 information failed. Aborting (1032): [error-info] " + str(e))
                 sys.exit(0)
 
             if res.getcode() != 200:
@@ -1096,7 +1097,7 @@ class o365UrlManagement:
                     self.log(2, self.log_level, "ENDPOINTS request to MS web service was successful.")
                 except Exception as e:
                     self.log(2, self.log_level, "Error: Good response but invalid (non-JSON) data encountered. Aborting (1024): " + str(e))
-                    print("Error: Good response but invalid (non-JSON) data encountered. Aborting (1024): " + str(e))
+                    print("Error: Good response but invalid (non-JSON) data encountered. Aborting (1024): [error-info] " + str(e))
                     sys.exit(0)
                 
 
@@ -1284,7 +1285,7 @@ class o365UrlManagement:
                 print("..Reading from serialized JSON config")
 
             except Exception as e:
-                print("ERROR: Imported JSON configuration is corrupt. Please fix and try again. Specific Error: " + e.message)
+                print("ERROR: Imported JSON configuration is corrupt. Please fix and try again. Specific Error: [error-info] " + e.message)
                 sys.exit(0)
                     
         # Do this if "--configfile" was passed as an argument and a JSON file was supplied
@@ -1314,7 +1315,7 @@ class o365UrlManagement:
                 print("..Reading from JSON config file")
             
             except Exception as e:
-                print("ERROR: Imported JSON configuration is corrupt. Please fix and try again. Specific Error: " + e.message)
+                print("ERROR: Imported JSON configuration is corrupt. Please fix and try again. Specific Error: [error-info] " + e.message)
                 sys.exit(0)
         
         # Do this if no --config/configfile argument was passed. Use the default JSON config.
