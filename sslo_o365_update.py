@@ -1338,7 +1338,8 @@ class o365UrlManagement:
             print("..Working directory created: " + this_work_directory)
         
         # Copy script to the working directory
-        os.system('cp -f ' + os.path.basename(__file__) + ' ' + this_work_directory + '/sslo_o365_update.py')
+        #os.system('cp -f ' + os.path.basename(__file__) + ' ' + this_work_directory + '/sslo_o365_update.py')
+        os.system('cp -f ' + os.path.abspath(__file__) + ' ' + this_work_directory + '/sslo_o365_update.py')
         print("..Script copied to working directory: " + this_work_directory + "/sslo_o365_update.py")
 
         # Write to a temporary file
