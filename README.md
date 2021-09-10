@@ -4,7 +4,7 @@ A small Python utility to download and maintain the dynamic set of Office 365 UR
 [![Releases](https://img.shields.io/github/v/release/f5devcentral/sslo-o365-update.svg)](https://github.com/f5devcentral/sslo-o365-update/releases)
 
 ### Script version
-7.2.2
+7.2.3
 
 ### SSL Orchestrator version support
 This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
@@ -185,7 +185,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "system": {
         "log_level": 1,
         "ca_bundle": "ca-bundle.crt",
-        "working_directory": "/shared/o365"
+        "working_directory": "/tmp/o365"
     },
     "schedule":{
         "periods":"none",
@@ -200,13 +200,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
 ---
 
 **Improvements**
-- Update 7.2.2 - to support additional enhancements
-   - Updated to address ip4/ip6 datagroup issue
-   - Updated to collapse IPv4 and IPv6 datagroup configuration into a single option (on/off)
-   - Updated to add 'none' option to schedule (no schedule)
-   - Updated to add 'daily' option to schedule
-   - Updated to add CA bundle selection for server certificate validation
-   - Updated to address url_included issue (was not adding urls)
-   - Updated to add last-run information fields in the configuration JSON
-   - Updated to add validation of O365 URL data response (in case of good response with no/bad data)
-   - Updated to add STDOUT messages for successful install, uninstall, force-update, and all errors
+- Update 7.2.3 - to support additional enhancements
+   - Updated to support TMSH and crontab execution by non-root user
+   - Updated log file to location under working directory
+   - Changed default working directory to /tmp/o365/
