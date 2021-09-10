@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 # O365 URL/IP update automation for BIG-IP
 
-version = "7.2.2"
+version = "7.2.3"
 
-# Last Modified: August 2021
+# Last Modified: September 2021
 # Update author: Kevin Stewart, Sr. SSA F5 Networks
 # Contributors: Regan Anderson, Brett Smith, F5 Networks
 # Original author: Makoto Omura, F5 Networks Japan G.K.
@@ -12,6 +12,10 @@ version = "7.2.2"
 # >>> NOTE: THIS VERSION OF THE OFFICE 365 SCRIPT IS SUPPORTED BY SSL ORCHESTRATOR 5.0 OR HIGHER <<<
 #
 # Updated for SSL Orchestrator by Kevin Stewart, SSA, F5 Networks
+# Update 20210910 - to support additional enhancements (by Kevin Stewart)
+#   - Updated to support TMSH and crontab execution by non-root user
+#   - Updated log file to location under working directory
+#   - Changed default working directory to /tmp/o365/
 # Update 20210823 - to support additional enhancements (by Kevin Stewart)
 #   - Updated to address ip4/ip6 datagroup issue
 #   - Updated to collapse IPv4 and IPv6 datagroup configuration into a single option (on/off)
@@ -75,7 +79,7 @@ version = "7.2.2"
 #     - Run the script with the --uninstall option. This will remove the running configuration.
 #     - Run the script with the --full_uninstall option. This will remove the running configuration, URL categories, and datagroups.
 # 
-# The installed script creates a working directory (default: /shared/o365), a configuration (iFile) json file, and scheduler.
+# The installed script creates a working directory (default: /tmp/o365), a configuration (iFile) json file, and scheduler.
 #
 # The configuration json file controls the various settings of the script. See json_config_data variable below for defaults.
 # 
@@ -123,7 +127,7 @@ version = "7.2.2"
 #     "system":
 #         "log_level": 1                        -> 0=none, 1=normal, 2=verbose
 #         "ca_bundle": "ca-bundle.crt"          -> CA certificate bundle to use for validating the remote server certificate
-#         "working_directory":"/shared/o365"    -> Working directory for running configuration files.
+#         "working_directory":"/tmp/o365"    -> Working directory for running configuration files.
 #
 #     "schedule":
 #         "periods":"monthly|weekly|daily|none" -> When to trigger updates ('monthly', 'weekly', 'daily', or 'none') -- default(none)
@@ -148,7 +152,7 @@ version = "7.2.2"
 # further testing or modification.
 #-----------------------------------------------------------------------
 
-import urllib2, fnmatch, uuid, os, re, json, commands, datetime, sys, argparse, copy, base64, fileinput
+import urllib2, fnmatch, uuid, os, pwd, re, json, commands, datetime, sys, argparse, copy, base64, fileinput
 
 #-----------------------------------------------------------------------
 # Default JSON configuration
@@ -193,7 +197,7 @@ json_config_data = {
     "system": {
         "log_level": 1,
         "ca_bundle": "ca-bundle.crt",
-        "working_directory": "/shared/o365"
+        "working_directory": "/tmp/o365"
     },
     "schedule":{
         "periods":"none",
@@ -204,16 +208,16 @@ json_config_data = {
     }
 }
 
-#-----------------------------------------------------------------------
-# System Options - Modify only when necessary
-#-----------------------------------------------------------------------
-# O365 custom URL category names
+##-----------------------------------------------------------------------
+## System Options - Modify only when necessary
+##-----------------------------------------------------------------------
+## O365 custom URL category names
 o365_category = "Office_365_Managed_All"
 o365_category_optimized = "Office_365_Managed_Optimized"
 o365_category_default = "Office_365_Managed_Default"
 o365_category_allow = "Office_365_Managed_Allow"
 
-# O365 data group names
+## O365 data group names
 dg_name_urls = "O365_URLs"
 dg_name_ipv4 = "O365_IPv4"
 dg_name_ipv6 = "O365_IPv6"
@@ -224,18 +228,15 @@ o365_dg_allow = "Office_365_Managed_Allow"
 o365_dg_ipv4 = "Office_365_Managed_IPv4"
 o365_dg_ipv6 = "Office_365_Managed_IPv6"
 
-# Microsoft Web Service URLs
+## Microsoft Web Service URLs
 url_ms_o365_endpoints = "endpoints.office.com"
 url_ms_o365_version = "endpoints.office.com"
 uri_ms_o365_version = "/version?ClientRequestId="
 
-# Log file destination
-log_dest_file = "/var/log/o365_update"
-
 
 class o365UrlManagement:
     
-    # Init function (set local variables)
+    ## Init function (set local variables)
     def __init__(self):
         self.customer_endpoint = ""
         self.service_areas_common = ""
@@ -260,20 +261,32 @@ class o365UrlManagement:
         self.json_config_file = ""
         self.force_update = False
         self.config_data = ""
+        self.logdir = ""
 
 
-    # Logging function
-    def log(self, lev, log_lev, msg):
+    ## Logging function
+    def log(self, lev, log_lev, log_dir, msg):
+        ## Create the log directory if it's doesn't exist
+        if not os.path.isdir(log_dir):
+                os.mkdir(log_dir)
+
+        ## Create the log file if it doesn't exist
+        if not os.path.exists(log_dir + "/o365_update"):
+            f = open(log_dir + "/o365_update", "w")
+            f.write("\n")
+            f.flush()
+            f.close()
+
         if int(log_lev) >= int(lev):
             log_string = "{0:%Y-%m-%d %H:%M:%S}".format(datetime.datetime.now()) + " " + msg + "\n"
-            f = open(log_dest_file, "a")
+            f = open(log_dir + "/o365_update", "a")
             f.write(log_string)
             f.flush()
             f.close()
         return
 
 
-    # Show help function
+    ## Show help function
     def show_help(self):
         print("Office 365 URL Management Script. Version: " + version)
         print("\nCommand line options for this application are:\n")
@@ -297,10 +310,10 @@ class o365UrlManagement:
         sys.exit(0)
 
 
-    # Get config function
+    ## Get config function
     def get_config(self):
         try:
-            # Find all versions of the configuration iFile
+            ## Find all versions of the configuration iFile
             o365_config = ""
             entry_array = []
             fileList = os.listdir('/config/filestore/files_d/Common_d/ifile_d/')
@@ -323,7 +336,7 @@ class o365UrlManagement:
                 f.close()
                 self.config_data = json.loads(f_content)
 
-                # Read configuration parameters from the json config
+                ## Read configuration parameters from the json config
                 self.customer_endpoint           = self.config_data["endpoint"]
                 self.service_area_common         = self.config_data["service_areas"]["common"]
                 self.service_area_exchange       = self.config_data["service_areas"]["exchange"]
@@ -343,6 +356,7 @@ class o365UrlManagement:
                 self.log_level                   = self.config_data["system"]["log_level"]
                 self.ca_bundle                   = self.config_data["system"]["ca_bundle"]
                 self.work_directory              = self.config_data["system"]["working_directory"]
+                self.logdir                      = self.config_data["system"]["working_directory"] + "/log"
                 self.schedule_periods            = self.config_data["schedule"]["periods"]
                 self.schedule_run_date           = self.config_data["schedule"]["run_date"]
                 self.schedule_run_time           = self.config_data["schedule"]["run_time"]
@@ -358,7 +372,7 @@ class o365UrlManagement:
             self.show_help()
 
 
-    # Show running configuration function
+    ## Show running configuration function
     def print_config(self):
         self.get_config()
         this_json = json.dumps(self.config_data, indent = 4)
@@ -366,7 +380,7 @@ class o365UrlManagement:
         sys.exit(1)
 
 
-    # JSON update function. Update imported json data to include required attributes and/or defaults if keys are omitted
+    ## JSON update function. Update imported json data to include required attributes and/or defaults if keys are omitted
     def update_json(self, jsonstr):
         json_data = copy.deepcopy(json_config_data)
         
@@ -374,7 +388,7 @@ class o365UrlManagement:
         if "endpoint" in jsonstr:
             json_data["endpoint"] = jsonstr["endpoint"]
 
-            ## input validation: ensure value is one of: Worldwide, USGovDoD, USGovGCCHigh, China, or Germany
+            ## Input validation: ensure value is one of: Worldwide, USGovDoD, USGovGCCHigh, China, or Germany
             if json_data["endpoint"] not in {"Worldwide", "USGovDoD", "USGovGCCHigh", "China", "Germany"}:
                 raise Exception('Endpoint value must be one of: \"Worldwide\", \"USGovDoD\", \"USGovGCCHigh\", \"China\", or \"Germany\". [1014]')
                 sys.exit(0)
@@ -386,51 +400,51 @@ class o365UrlManagement:
             if "common" in jsonstr["service_areas"]:
                 json_data["service_areas"]["common"] = jsonstr["service_areas"]["common"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["service_areas"]["common"]) != bool:
                     raise Exception('Service Areas "common" value must be a Boolean True or False. [1021]')
                     sys.exit(0)
             else: 
-                ## default True
+                ## Default True
                 json_data["service_areas"]["common"] = True
 
             ## service_areas:exchange
             if "exchange" in jsonstr["service_areas"]:
                 json_data["service_areas"]["exchange"] = jsonstr["service_areas"]["exchange"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["service_areas"]["exchange"]) != bool:
                     raise Exception('Service Areas "exchange" value must be a Boolean True or False. [1011]')
                     sys.exit(0)
             else: 
-                ## default False
+                ## Default False
                 json_data["service_areas"]["exchange"] = False
 
             ## service_areas:sharepoint
             if "sharepoint" in jsonstr["service_areas"]:
                 json_data["service_areas"]["sharepoint"] = jsonstr["service_areas"]["sharepoint"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["service_areas"]["sharepoint"]) != bool:
                     raise Exception('Service Areas "sharepoint" value must be a Boolean True or False. [1012]')
                     sys.exit(0)
             else: 
-                ## default False
+                ## Default False
                 json_data["service_areas"]["sharepoint"] = False
 
             ## service_areas:skype
             if "skype" in jsonstr["service_areas"]:
                 json_data["service_areas"]["skype"] = jsonstr["service_areas"]["skype"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["service_areas"]["skype"]) != bool:
                     raise Exception('Service Areas "skype" value must be a Boolean True or False. [1017]')
                     sys.exit(0)
             else: 
-                ## default False
+                ## Default False
                 json_data["service_areas"]["skype"] = False
         else:
-            ## no service_areas block defined, set defaults
+            ## No service_areas block defined, set defaults
             json_data["service_areas"]["common"] = True
             json_data["service_areas"]["exchange"] = False
             json_data["service_areas"]["sharepoint"] = False
@@ -443,40 +457,40 @@ class o365UrlManagement:
             if "url_categories" in jsonstr["outputs"]:
                 json_data["outputs"]["url_categories"] = jsonstr["outputs"]["url_categories"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["outputs"]["url_categories"]) != bool:
                     raise Exception('Outputs "url_categories" value must be a Boolean True or False. [1019]')
                     sys.exit(0)
             else:
-                ## default True
+                ## Default True
                 json_data["outputs"]["url_categories"] = True
 
             ## outputs:url_datagroups
             if "url_datagroups" in jsonstr["outputs"]:
                 json_data["outputs"]["url_datagroups"] = jsonstr["outputs"]["url_datagroups"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["outputs"]["url_datagroups"]) != bool:
                     raise Exception('Outputs "url_datagroups" value must be a Boolean True or False. [1010]')
                     sys.exit(0)
             else:
-                ## default False
+                ## Default False
                 json_data["outputs"]["url_datagroups"] = False
 
             ## outputs:ip_datagroups
             if "ip_datagroups" in jsonstr["outputs"]:
                 json_data["outputs"]["ip_datagroups"] = jsonstr["outputs"]["ip_datagroups"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["outputs"]["ip_datagroups"]) != bool:
                     raise Exception('Outputs "ip_datagroups" value must be a Boolean True or False. [1037]')
                     sys.exit(0)
             else:
-                ## default False
+                ## Default False
                 json_data["outputs"]["ip_datagroups"] = False
 
         else:
-            ## no outputs block defined, set defaults
+            ## No outputs block defined, set defaults
             json_data["outputs"]["url_categories"] = True
             json_data["outputs"]["url_datagroups"] = False
             json_data["outputs"]["ip_datagroups"] = True
@@ -488,51 +502,51 @@ class o365UrlManagement:
             if "all" in jsonstr["o365_categories"]:
                 json_data["o365_categories"]["all"] = jsonstr["o365_categories"]["all"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["o365_categories"]["all"]) != bool:
                     raise Exception('O365 Categories "all" value must be a Boolean True or False. [1013]')
                     sys.exit(0)
             else:
-                ## default True
+                ## Default True
                 json_data["o365_categories"]["all"] = True
 
             ## o365_categories:optimize
             if "optimize" in jsonstr["o365_categories"]:
                 json_data["o365_categories"]["optimize"] = jsonstr["o365_categories"]["optimize"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["o365_categories"]["optimize"]) != bool:
                     raise Exception('O365 Categories "optimize" value must be a Boolean True or False. [1026]')
                     sys.exit(0)
             else:
-                ## default False
+                ## Default False
                 json_data["o365_categories"]["optimize"] = False
 
             ## o365_categories:default
             if "default" in jsonstr["o365_categories"]:
                 json_data["o365_categories"]["default"] = jsonstr["o365_categories"]["default"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["o365_categories"]["default"]) != bool:
                     raise Exception('O365 Categories "default" value must be a Boolean True or False. [1027]')
                     sys.exit(0)
             else:
-                ## default False
+                ## Default False
                 json_data["o365_categories"]["default"] = False
 
             ## o365_categories:allow
             if "allow" in jsonstr["o365_categories"]:
                 json_data["o365_categories"]["allow"] = jsonstr["o365_categories"]["allow"]
 
-                ## input validation: ensure value is boolean
+                ## Input validation: ensure value is boolean
                 if type(json_data["o365_categories"]["allow"]) != bool:
                     raise Exception('O365 Categories "allow" value must be a Boolean True or False. [1028]')
                     sys.exit(0)
             else:
-                ## default False
+                ## Default False
                 json_data["o365_categories"]["allow"] = False
         else:
-            ## no o365_categories block defined, set defaults
+            ## No o365_categories block defined, set defaults
             json_data["o365_categories"]["all"] = True
             json_data["o365_categories"]["optimize"] = False
             json_data["o365_categories"]["default"] = False
@@ -542,33 +556,33 @@ class o365UrlManagement:
         if "only_required" in jsonstr:
             json_data["only_required"] = jsonstr["only_required"]
 
-            ## input validation: ensure value is boolean
+            ## Input validation: ensure value is boolean
             if type(json_data["only_required"]) != bool:
                 raise Exception('The "only_required" value must be a Boolean True or False. [1029]')
                 sys.exit(0)
         else:
-            ## default True
+            ## Default True
             json_data["only_required"] = True
 
         ## excluded_urls
         if "excluded_urls" in jsonstr:
             json_data["excluded_urls"] = jsonstr["excluded_urls"]
         else:
-            ## default []
+            ## Default []
             json_data["excluded_urls"] = []
 
         ## included_urls
         if "included_urls" in jsonstr:
             json_data["included_urls"] = jsonstr["included_urls"]
         else:
-            ## default []
+            ## Default []
             json_data["included_urls"] = []
 
         ## excluded_ips
         if "excluded_ips" in jsonstr:
             json_data["excluded_ips"] = jsonstr["excluded_ips"]
         else:
-            ## default []
+            ## Default []
             json_data["excluded_ips"] = []
 
         ## system
@@ -578,37 +592,37 @@ class o365UrlManagement:
             if "log_level" in jsonstr["system"]:
                 json_data["system"]["log_level"] = jsonstr["system"]["log_level"]
 
-                ## input validation: ensure value is an integer
+                ## Input validation: ensure value is an integer
                 if type(json_data["system"]["log_level"]) != int:
                     raise Exception('The System "log level" value must be an integer between 0 and 2. [1018]')
                     sys.exit(0)
 
-                ## input validation: ensure value is an integer between 0 and 2
+                ## Input validation: ensure value is an integer between 0 and 2
                 if json_data["system"]["log_level"] < 0 or json_data["system"]["log_level"] > 2:
                     raise Exception('The System "log level" value must be an integer between 0 and 2. [1031]')
                     sys.exit(0)
             else:
-                ## default 1
+                ## Default 1
                 json_data["system"]["log_level"] = 1
             
             ## system:ca_bundle
             if "ca_bundle" in jsonstr["system"]:
                 json_data["system"]["ca_bundle"] = jsonstr["system"]["ca_bundle"]
             else:
-                ## default ca-bundle.crt
+                ## Default ca-bundle.crt
                 json_data["system"]["ca_bundle"] = "ca-bundle.crt"
 
             ## system:working_directory
             if "working_directory" in jsonstr["system"]:
                 json_data["system"]["working_directory"] = jsonstr["system"]["working_directory"]
             else:
-                ## default /shared/o365
-                json_data["system"]["working_directory"] = "/shared/o365"
+                ## Default /tmp/o365
+                json_data["system"]["working_directory"] = "/tmp/o365"
         else:
-            ## no system block defined, set defaults
+            ## No system block defined, set defaults
             json_data["system"]["log_level"] = 1
             json_data["system"]["ca_bundle"] = "ca-bundle.crt"
-            json_data["system"]["working_directory"] = "/shared/o365"
+            json_data["system"]["working_directory"] = "/tmp/o365"
 
         ## schedule
         if "schedule" in jsonstr:
@@ -617,12 +631,12 @@ class o365UrlManagement:
             if "periods" in jsonstr["schedule"]:
                 json_data["schedule"]["periods"] = jsonstr["schedule"]["periods"]
 
-                ## input validation: ensure value is one of: monthly, weekly
+                ## Input validation: ensure value is one of: monthly, weekly
                 if json_data["schedule"]["periods"] not in {"monthly", "weekly", "daily", "none"}:
                     raise Exception('The Schedule "periods" value must be one of: \"monthly\", \"weekly\", \"daily\", or \"none\". [1020]')
                     sys.exit(0)
             else:
-                ## default none
+                ## Default none
                 json_data["schedule"]["periods"] = "none"
             
             ## schedule:run_date
@@ -630,34 +644,34 @@ class o365UrlManagement:
                 json_data["schedule"]["run_date"] = jsonstr["schedule"]["run_date"]
 
                 if json_data["schedule"]["run_date"] == "":
-                    ## value empty, set default 1
+                    ## Value empty, set default 1
                     json_data["schedule"]["run_date"] = 1
 
-                ## input validation: validate weekly/monthly values
+                ## Input validation: validate weekly/monthly values
                 elif json_data["schedule"]["periods"] == "monthly":
-                    ## input validation: ensure run_date is an integer
+                    ## Input validation: ensure run_date is an integer
                     if type(json_data["schedule"]["run_date"]) != int:
                         raise Exception('Schedule "run_date" value for period(monthly) must be an integer between 1 and 31. [1016]')
                         sys.exit(0)
                 
-                    ## input validation: ensure monthly run_date is a value between 1 and 31
+                    ## Input validation: ensure monthly run_date is a value between 1 and 31
                     if json_data["schedule"]["run_date"] <= 0 or json_data["schedule"]["run_date"] > 31:
                         raise Exception('Schedule "run_date" value for period(monthly) must be an integer between 1 and 31. [1008]')
                         sys.exit(0)
                 
                 elif json_data["schedule"]["periods"] == "weekly":
-                    ## input validation: ensure run_date is an integer
+                    ## Input validation: ensure run_date is an integer
                     if type(json_data["schedule"]["run_date"]) != int:
                         raise Exception('Schedule "run_date" value for period(weekly) must be an integer between 0 (Sunday) and 6 (Saturday). [1025]')
                         sys.exit(0)
                         
-                    ## input validation: ensure weekly run_date is a value between 1 and 7
+                    ## Input validation: ensure weekly run_date is a value between 1 and 7
                     if json_data["schedule"]["run_date"] < 0 or json_data["schedule"]["run_date"] > 6:
                         raise Exception('Schedule "run_date" value for period(weekly) must be an integer between 0 (Sunday) and 6 (Saturday). [1030]')
                         sys.exit(0)
 
             else:
-                ## default 1
+                ## Default 1
                 json_data["schedule"]["run_date"] = 1
             
             ## schedule:run_time
@@ -665,15 +679,15 @@ class o365UrlManagement:
                 json_data["schedule"]["run_time"] = jsonstr["schedule"]["run_time"]
 
                 if json_data["schedule"]["run_time"] == "":
-                    ## value empty, set default "04:00"
+                    ## Value empty, set default "04:00"
                     json_data["schedule"]["run_time"] = "04:00"    
 
-                ## input validation: ensure correct time format
+                ## Input validation: ensure correct time format
                 elif not re.match(r"[0-9]{1,2}:[0-9]{2}", json_data["schedule"]["run_time"]):
                     raise Exception('Schedule "run_time" value must be a valid 24-hour time (ex. 14:30). [1033]')
                     sys.exit(0)
 
-                ## input validation: ensure first number (hour) between 0 and 23, and second number (minutes) between 0 and 59
+                ## Input validation: ensure first number (hour) between 0 and 23, and second number (minutes) between 0 and 59
                 this_time = json_data["schedule"]["run_time"].split(":")
                 if int(this_time[0]) < 0 or int(this_time[0]) > 23:
                     raise Exception('Schedule "run_time" hour value must be a valid 24-hour integer between 0 and 23. [1038]')
@@ -682,7 +696,7 @@ class o365UrlManagement:
                     raise Exception('Schedule "run_time" minute value must be a valid integer between 0 and 59. [1022]')
                     sys.exit(0)
             else:
-                ## default "04:00"
+                ## Default "04:00"
                 json_data["schedule"]["run_time"] = "04:00"
             
             ## schedule:start_date
@@ -692,12 +706,12 @@ class o365UrlManagement:
                 if json_data["schedule"]["start_date"] == "":
                     pass
                 
-                ## input validation: ensure correct m/d/Y format
+                ## Input validation: ensure correct m/d/Y format
                 elif not re.match(r"[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4}", json_data["schedule"]["start_date"]):
                     raise Exception('Schedule "start_date" value must be in month/day/year format (ex. 03/29/2021). [1023]')              
                     sys.exit(0)
             else:
-                ## default ""
+                ## Default ""
                 json_data["schedule"]["start_date"] = ""
 
             ## schedule:start_time
@@ -707,12 +721,12 @@ class o365UrlManagement:
                 if json_data["schedule"]["start_time"] == "":
                     pass
                 
-                ## input validation: ensure correct time format
+                ## Input validation: ensure correct time format
                 elif not re.match(r"[0-9]{1,2}:[0-9]{2}", json_data["schedule"]["start_time"]):
                     raise Exception('Schedule "start_time" value must be a valid 24-hour time (ex. 14:30). [1034]')
                     sys.exit(0)
 
-                ## input validation: ensure first number (hour) between 0 and 23, and second number (minutes) between 0 and 59
+                ## Input validation: ensure first number (hour) between 0 and 23, and second number (minutes) between 0 and 59
                 else:
                     this_time = json_data["schedule"]["start_time"].split(":")
                     if int(this_time[0]) < 0 or int(this_time[0]) > 23:
@@ -722,10 +736,10 @@ class o365UrlManagement:
                         raise Exception('Schedule "start_time" minute value must be a valid integer between 0 and 59. [1036]')
                         sys.exit(0)
             else:
-                ## default ""
+                ## Default ""
                 json_data["schedule"]["start_time"] = ""
         else:
-            ## no schedule block defined, set defaults
+            ## No schedule block defined, set defaults
             json_data["schedule"]["periods"] = "none"
             json_data["schedule"]["run_date"] = 1
             json_data["schedule"]["run_time"] = "04:00"
@@ -759,115 +773,116 @@ class o365UrlManagement:
         ## Convert updated JSON data to formatted string
         json_config_final = json.dumps(config_data, indent = 4)
 
-        # Write updated JSON data to a temporary file
+        ## Write updated JSON data to a temporary file
         with open(config_data["system"]["working_directory"] + "/config.json", "w") as outfile:
             outfile.write(json_config_final)
 
-        # Update the ifile configuration / delete temporary file
-        result = commands.getoutput("tmsh modify sys file ifile o365_config.json source-path file:" + config_data["system"]["working_directory"] + "/config.json")
+        ## Update the ifile configuration / delete temporary file
+        result = commands.getoutput("tmsh -a modify sys file ifile o365_config.json source-path file:" + config_data["system"]["working_directory"] + "/config.json")
         os.remove(config_data["system"]["working_directory"] + "/config.json")
 
 
-    # Create URL categories function
+    ## Create URL categories function
     def create_url_categories (self, url_file, url_list, version_latest):
-        # Initialize the url string
+        ## Initialize the url string
         str_urls_to_bypass = ""
 
-        # Create new or clean out existing URL category - add the latest version as first entry
-        result = commands.getoutput("tmsh list sys application service o365_update.app/o365_update")
+        ## Create new or clean out existing URL category - add the latest version as first entry
+        result = commands.getoutput("tmsh -a list sys application service o365_update.app/o365_update")
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh create sys application service o365_update traffic-group traffic-group-local-only device-group none")
-            self.log(2, self.log_level, "Application service not found. Creating o365_update.app/o365_update")
+            result2 = commands.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
+            self.log(2, self.log_level, self.logdir, "Application service not found. Creating o365_update.app/o365_update")
         
-        result = commands.getoutput("tmsh list sys url-db url-category " + url_file)
+        result = commands.getoutput("tmsh -a list sys url-db url-category " + url_file)
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh create /sys url-db url-category " + url_file + " display-name " + url_file + " app-service o365_update.app/o365_update urls replace-all-with { https://" + version_latest + "/ { type exact-match } } default-action allow")
-            self.log(2, self.log_level, "O365 custom URL category (" + url_file + ") not found. Created new O365 custom category.")
+            result2 = commands.getoutput("tmsh -a create /sys url-db url-category " + url_file + " display-name " + url_file + " app-service o365_update.app/o365_update urls replace-all-with { https://" + version_latest + "/ { type exact-match } } default-action allow")
+            self.log(2, self.log_level, self.logdir, "O365 custom URL category (" + url_file + ") not found. Created new O365 custom category.")
         else:
-            result2 = commands.getoutput("tmsh modify /sys url-db url-category " + url_file + " app-service o365_update.app/o365_update urls replace-all-with { https://" + version_latest + "/ { type exact-match } }")
-            self.log(2, self.log_level, "O365 custom URL category (" + url_file + ") exists. Clearing entries for new data.")
+            result2 = commands.getoutput("tmsh -a modify /sys url-db url-category " + url_file + " app-service o365_update.app/o365_update urls replace-all-with { https://" + version_latest + "/ { type exact-match } }")
+            self.log(2, self.log_level, self.logdir, "O365 custom URL category (" + url_file + ") exists. Clearing entries for new data.")
         
-        # Loop through URLs and insert into URL category    
+        ## Loop through URLs and insert into URL category    
         for url in url_list:
-            # Force URL to lower case
+            ## Force URL to lower case
             url = url.lower()
 
-            # If URL starts with an asterisk, set as a glob-match URL, otherwise exact-match. Send to a string.
+            ## If URL starts with an asterisk, set as a glob-match URL, otherwise exact-match. Send to a string.
             if ('*' in url):
-                # Escaping any asterisk characters
+                ## Escaping any asterisk characters
                 url_processed = re.sub('\*', '\\*', url)
                 str_urls_to_bypass = str_urls_to_bypass + " urls add { \"https://" + url_processed + "/\" { type glob-match } } urls add { \"http://" + url_processed + "/\" { type glob-match } }"
             else:
                 str_urls_to_bypass = str_urls_to_bypass + " urls add { \"https://" + url + "/\" { type exact-match } } urls add { \"http://" + url + "/\" { type exact-match } }"
 
-        # Import the URL entries
-        result = commands.getoutput("tmsh modify /sys url-db url-category " + url_file + " app-service o365_update.app/o365_update" + str_urls_to_bypass)
+        ## Import the URL entries
+        result = commands.getoutput("tmsh -a modify /sys url-db url-category " + url_file + " app-service o365_update.app/o365_update" + str_urls_to_bypass)
 
 
-    # Create URL datagroups function
+    ## Create URL datagroups function
     def create_url_datagroups (self, url_file, url_list):
-        # Write data to a file for import into data group
+        ## Write data to a file for import into data group
         fout = open(self.work_directory + "/" + url_file, 'w')
         for url in (list(sorted(set(url_list)))):
-            # Replace any asterisk characters with a dot
+            ## Replace any asterisk characters with a dot
             url_processed = re.sub('\*', '', url)
             fout.write("\"" + str(url_processed.lower()) + "\" := \"\",\n")
         fout.flush()
         fout.close()
 
-        # Create URL data group files in TMSH if they don't already exist
-        result = commands.getoutput("tmsh list sys application service o365_update.app/o365_update")
+        ## Create URL data group files in TMSH if they don't already exist
+        result = commands.getoutput("tmsh -a list sys application service o365_update.app/o365_update")
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh create sys application service o365_update traffic-group traffic-group-local-only device-group none")
-            self.log(2, self.log_level, "Application service not found. Creating o365_update.app/o365_update")
+            result2 = commands.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
+            self.log(2, self.log_level, self.logdir, "Application service not found. Creating o365_update.app/o365_update")
 
-        result = commands.getoutput("tmsh list /sys file data-group o365_update.app/" + url_file)
+        result = commands.getoutput("tmsh -a list /sys file data-group o365_update.app/" + url_file)
         if "was not found" in result:
-            # Create (sys) external data group
-            result2 = commands.getoutput("tmsh create /sys file data-group o365_update.app/" + url_file + " separator \":=\" source-path file:" + self.work_directory + "/" + url_file + " type string")
-            # Create (ltm) link to external data group
-            result3 = commands.getoutput("tmsh create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
-            self.log(2, self.log_level, "O365 URL data group (" + url_file + ") not found. Created new data group.")
+            ## Create (sys) external data group
+            result2 = commands.getoutput("tmsh -a create /sys file data-group o365_update.app/" + url_file + " separator \":=\" source-path file:" + self.work_directory + "/" + url_file + " type string")
+            ## Create (ltm) link to external data group
+            result3 = commands.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
+            self.log(2, self.log_level, self.logdir, "O365 URL data group (" + url_file + ") not found. Created new data group.")
         else:
-            # Update (sys) external data group
-            result2 = commands.getoutput("tmsh modify /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file)
-            # Update (ltm) link to external data group
-            result3 = commands.getoutput("tmsh create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
-            self.log(2, self.log_level, "O365 URL data group (" + url_file + ") exists. Updated existing data group.")
+            ## Update (sys) external data group
+            result2 = commands.getoutput("tmsh -a modify /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file)
+            ## Update (ltm) link to external data group
+            result3 = commands.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
+            self.log(2, self.log_level, self.logdir, "O365 URL data group (" + url_file + ") exists. Updated existing data group.")
 
         os.remove(self.work_directory + "/" + url_file)
 
 
-    # Create IP datagroups function
+    ## Create IP datagroups function
     def create_ip_datagroups (self, url_file, url_list):
-        # Write data to a file for import into data group
+        ## Write data to a file for import into data group
         fout = open(self.work_directory + "/" + url_file, 'w')
         for ip in (list(sorted(url_list))):
             fout.write("network " + str(ip) + ",\n")
         fout.flush()
         fout.close()
 
-        # Create URL data group files in TMSH if they don't already exist
-        result = commands.getoutput("tmsh list sys application service o365_update.app/o365_update")
+        ## Create URL data group files in TMSH if they don't already exist
+        result = commands.getoutput("tmsh -a list sys application service o365_update.app/o365_update")
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh create sys application service o365_update traffic-group traffic-group-local-only device-group none")
-            self.log(2, self.log_level, "Application service not found. Creating o365_update.app/o365_update")
+            result2 = commands.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
+            self.log(2, self.log_level, self.logdir, "Application service not found. Creating o365_update.app/o365_update")
 
-        result = commands.getoutput("tmsh list /sys file data-group o365_update.app/" + url_file)
+        result = commands.getoutput("tmsh -a list /sys file data-group o365_update.app/" + url_file)
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh create /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file + " type ip")
-            result3 = commands.getoutput("tmsh create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
-            self.log(2, self.log_level, "O365 IP data group (" + url_file + ") not found. Created new data group.")
+            result2 = commands.getoutput("tmsh -a create /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file + " type ip")
+            result3 = commands.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
+            self.log(2, self.log_level, self.logdir, "O365 IP data group (" + url_file + ") not found. Created new data group.")
         else:
-            result2 = commands.getoutput("tmsh modify /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file)
-            result3 = commands.getoutput("tmsh create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
-            self.log(2, self.log_level, "O365 IP data group (" + url_file + ") exists. Updated existing data group.")
+            result2 = commands.getoutput("tmsh -a modify /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file)
+            result3 = commands.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
+            self.log(2, self.log_level, self.logdir, "O365 IP data group (" + url_file + ") exists. Updated existing data group.")
 
         os.remove(self.work_directory + "/" + url_file)
 
 
-    # Main work function. Fetches O365 URLs and updates URL categories and datagroups
+    ## Main work function. Fetches O365 URLs and updates URL categories and datagroups
     def update_o365(self):
+
         list_urls_to_bypass = []
         list_optimized_urls_to_bypass = []
         list_default_urls_to_bypass = []
@@ -878,35 +893,35 @@ class o365UrlManagement:
         self.get_config()
         if self.work_directory != "":
 
-            # -----------------------------------------------------------------------
-            # Scheduling:
-            # - /etc/cron.d/0hourly manages the frequency (periods, run_date, run_time)
-            # - Make sure here that current date/time >= start_data, start_time
-            # - If no start_date/start_time defined, just proceed
-            # -----------------------------------------------------------------------
+            ## -----------------------------------------------------------------------
+            ## Scheduling:
+            ## - /etc/cron.d/0hourly manages the frequency (periods, run_date, run_time)
+            ## - Make sure here that current date/time >= start_data, start_time
+            ## - If no start_date/start_time defined, just proceed
+            ## -----------------------------------------------------------------------
             if self.schedule_start_date != "":
                 ## start_date/start_time defined - process datetime logic
                 if self.schedule_start_time == "":
                     self.schedule_start_time != "00:00"
 
-                ## extract day, month, year, hour, minute from start_date and start_time
+                ## Extract day, month, year, hour, minute from start_date and start_time
                 inmonth, inday, inyear = [int(x) for x in self.schedule_start_date.split('/')]
                 inhour, inminute = [int(x) for x in self.schedule_start_time.split(':')]
 
-                ## define start and current datetimes
+                ## Define start and current datetimes
                 start = datetime.datetime(inyear, inmonth, inday, inhour, inminute, 0)
                 present = datetime.datetime.now()
 
-                ## if start is > current datetime, do not proceed
+                ## If start is > current datetime, do not proceed
                 if start > present:
-                    self.log(1, self.log_level, "Defined start date/time greater than current time - Aborting (1003).")
+                    self.log(1, self.log_level, self.logdir, "Defined start date/time greater than current time - Aborting (1003).")
                     sys.exit()
 
 
-            # -----------------------------------------------------------------------
-            # System Proxy Detection (System : Configuration : Devices : Upstream Proxy)
-            # -----------------------------------------------------------------------
-            result = commands.getoutput("tmsh list sys management-proxy-config proxy-ip-addr proxy-port")
+            ## -----------------------------------------------------------------------
+            ## System Proxy Detection (System : Configuration : Devices : Upstream Proxy)
+            ## -----------------------------------------------------------------------
+            result = commands.getoutput("tmsh -a list sys management-proxy-config proxy-ip-addr proxy-port")
             if result != "":
                 for line in result.split('\n'):
                     if "proxy-ip-addr" in line:
@@ -918,10 +933,10 @@ class o365UrlManagement:
                 self.proxyport = None
             
 
-            # -----------------------------------------------------------------------
-            # System CA bundle selection (defaults to ca-bundle.crt if none selected)
-            # -----------------------------------------------------------------------
-            result = commands.getoutput("tmsh list sys file ssl-cert " + self.ca_bundle + " system-path")
+            ## -----------------------------------------------------------------------
+            ## System CA bundle selection (defaults to ca-bundle.crt if none selected)
+            ## -----------------------------------------------------------------------
+            result = commands.getoutput("tmsh -a list sys file ssl-cert " + self.ca_bundle + " system-path")
             if result != "":
                 for line in result.split('\n'):
                     if "system-path" in line:
@@ -930,68 +945,68 @@ class o365UrlManagement:
                 self.cafile = "ca-bundle.crt"
 
 
-            # -----------------------------------------------------------------------
-            # GUID management
-            # -----------------------------------------------------------------------
-            # Create the guid file if it doesn't exist
+            ## -----------------------------------------------------------------------
+            ## GUID management
+            ## -----------------------------------------------------------------------
+            ## Create the guid file if it doesn't exist
             if not os.path.isdir(self.work_directory):
                 os.mkdir(self.work_directory)
-                self.log(1, self.log_level, "Created work directory " + self.work_directory + " because it did not exist.")
+                self.log(1, self.log_level, self.logdir, "Created work directory " + self.work_directory + " because it did not exist.")
             if not os.path.exists(self.work_directory + "/guid.txt"):
                 f = open(self.work_directory + "/guid.txt", "w")
                 f.write("\n")
                 f.flush()
                 f.close()
-                self.log(1, self.log_level, "Created GUID file " + self.work_directory + "/guid.txt because it did not exist.")
+                self.log(1, self.log_level, self.logdir, "Created GUID file " + self.work_directory + "/guid.txt because it did not exist.")
 
-            # Read guid from file and validate.  Create one if not existent
+            ## Read guid from file and validate.  Create one if not existent
             f = open(self.work_directory + "/guid.txt", "r")
             f_content = f.readline()
             f.close()
             if re.match('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', f_content):
                 guid = f_content
-                self.log(2, self.log_level, "Valid GUID is read from local file " + self.work_directory + "/guid.txt.")
+                self.log(2, self.log_level, self.logdir, "Valid GUID is read from local file " + self.work_directory + "/guid.txt.")
             else:
                 guid = str(uuid.uuid4())
                 f = open(self.work_directory + "/guid.txt", "w")
                 f.write(guid)
                 f.flush()
                 f.close()
-                self.log(1, self.log_level, "Generated a new GUID, and saved it to " + self.work_directory + "/guid.txt.")
+                self.log(1, self.log_level, self.logdir, "Generated a new GUID, and saved it to " + self.work_directory + "/guid.txt.")
 
 
-            # -----------------------------------------------------------------------
-            # O365 endpoints list version check
-            # -----------------------------------------------------------------------
-            # Ensure that a local version exists
+            ## -----------------------------------------------------------------------
+            ## O365 endpoints list version check
+            ## -----------------------------------------------------------------------
+            ## Ensure that a local version exists
             if os.path.isfile(self.work_directory + "/o365_version.txt"):
                 f = open(self.work_directory + "/o365_version.txt", "r")
                 f_content = f.readline()
                 f.close()
-                # Check if the VERSION record format is valid
+                ## Check if the VERSION record format is valid
                 if re.match('[0-9]{10}', f_content):
                     ms_o365_version_previous = f_content
-                    self.log(2, self.log_level, "Valid previous VERSION found in " + self.work_directory + "/o365_version.txt.")
+                    self.log(2, self.log_level, self.logdir, "Valid previous VERSION found in " + self.work_directory + "/o365_version.txt.")
                 else:
                     ms_o365_version_previous = "1970010200"
                     f = open(self.work_directory + "/o365_version.txt", "w")
                     f.write(ms_o365_version_previous)
                     f.flush()
                     f.close()
-                    self.log(1, self.log_level, "Valid previous VERSION was not found.  Wrote dummy value in " + self.work_directory + "/o365_version.txt.")
+                    self.log(1, self.log_level, self.logdir, "Valid previous VERSION was not found.  Wrote dummy value in " + self.work_directory + "/o365_version.txt.")
             else:
                 ms_o365_version_previous = "1970010200"
                 f = open(self.work_directory + "/o365_version.txt", "w")
                 f.write(ms_o365_version_previous)
                 f.flush()
                 f.close()
-                self.log(1, self.log_level, "Valid previous VERSION was not found.  Wrote dummy value in " + self.work_directory + "/o365_version.txt.")
+                self.log(1, self.log_level, self.logdir, "Valid previous VERSION was not found.  Wrote dummy value in " + self.work_directory + "/o365_version.txt.")
 
 
-            # -----------------------------------------------------------------------
-            # O365 endpoints list VERSION check
-            # -----------------------------------------------------------------------
-            # Read the version of previously received records. If different than stored information, then data is assumed new/changed
+            ## -----------------------------------------------------------------------
+            ## O365 endpoints list VERSION check
+            ## -----------------------------------------------------------------------
+            ## Read the version of previously received records. If different than stored information, then data is assumed new/changed
             request_string = uri_ms_o365_version + guid
             req_string = "https://" + url_ms_o365_version + request_string
 
@@ -1007,27 +1022,27 @@ class o365UrlManagement:
                     res = urllib2.urlopen(req_string, cafile=self.cafile)
             
             except urllib2.URLError as e:
-                self.log(1, self.log_level, "ERROR: Request to fetch O365 information failed. Aborting (1004): " + str(e.reason))
+                self.log(1, self.log_level, self.logdir, "ERROR: Request to fetch O365 information failed. Aborting (1004): " + str(e.reason))
                 print("ERROR: Request to fetch O365 information failed. Aborting (1004): [error-info] " + str(e.reason))
                 sys.exit(0)
             
             except Exception as e:
-                self.log(1, self.log_level, "ERROR: Request to fetch O365 information failed. Aborting (1005): " + str(e))
+                self.log(1, self.log_level, self.logdir, "ERROR: Request to fetch O365 information failed. Aborting (1005): " + str(e))
                 print("ERROR: Request to fetch O365 information failed. Aborting (1005): [error-info] " + str(e))
                 sys.exit(0)
 
             if res.getcode() != 200:
-                # MS O365 version request failed - abort
-                self.log(1, self.log_level, "ERROR: VERSION request to MS web service failed. Aborting (1006).")
+                ## MS O365 version request failed - abort
+                self.log(1, self.log_level, self.logdir, "ERROR: VERSION request to MS web service failed. Aborting (1006).")
                 print("ERROR: VERSION request to MS web service failed. Aborting (1006).")
                 sys.exit(0)
             else:
                 try:
-                    # Data fetched - validate and convert to JSON
+                    ## Data fetched - validate and convert to JSON
                     dict_o365_version = json.loads(res.read())
-                    self.log(2, self.log_level, "VERSION request to MS web service was successful.")
+                    self.log(2, self.log_level, self.logdir, "VERSION request to MS web service was successful.")
                 except Exception as e:
-                    self.log(2, self.log_level, "Error: Good response but invalid (non-JSON) data encountered. Aborting (1007): " + str(e))
+                    self.log(2, self.log_level, self.logdir, "Error: Good response but invalid (non-JSON) data encountered. Aborting (1007): " + str(e))
                     print("Error: Good response but invalid (non-JSON) data encountered. Aborting (1007): [error-info] " + str(e))
                     sys.exit(0)
 
@@ -1044,24 +1059,24 @@ class o365UrlManagement:
                             f.flush()
                             f.close()
 
-            self.log(2, self.log_level, "Previous VERSION is " + ms_o365_version_previous)
-            self.log(2, self.log_level, "Latest VERSION is " + ms_o365_version_latest)
+            self.log(2, self.log_level, self.logdir, "Previous VERSION is " + ms_o365_version_previous)
+            self.log(2, self.log_level, self.logdir, "Latest VERSION is " + ms_o365_version_latest)
 
             if self.force_update:
-                self.log(1, self.log_level, "Command called with \"--force\" option. Manual update initiated.")
+                self.log(1, self.log_level, self.logdir, "Command called with \"--force\" option. Manual update initiated.")
                 pass
             elif ms_o365_version_latest == ms_o365_version_previous:
                 present = datetime.datetime.now()
-                self.log(1, self.log_level, "Latest MS O365 URL/IP Address list already exists: " + ms_o365_version_latest + ". Aborting at " + present.strftime("%Y-%m-%d %H:%M"))
+                self.log(1, self.log_level, self.logdir, "Latest MS O365 URL/IP Address list already exists: " + ms_o365_version_latest + ". Aborting at " + present.strftime("%Y-%m-%d %H:%M"))
                 print("Latest MS O365 URL/IP Address list already exists: " + ms_o365_version_latest + ". Aborting at " + present.strftime("%Y-%m-%d %H:%M"))
                 self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "URLs exists - update bypassed")
                 sys.exit(0)
             
 
-            # -----------------------------------------------------------------------
-            # Request O365 endpoints list and store in dictionaries
-            # -----------------------------------------------------------------------
-            # Make the request to fetch JSON data from Microsoft
+            ## -----------------------------------------------------------------------
+            ## Request O365 endpoints list and store in dictionaries
+            ## -----------------------------------------------------------------------
+            ## Make the request to fetch JSON data from Microsoft
             request_string = "/endpoints/" + self.customer_endpoint + "?ClientRequestId=" + guid    
             req_string = "https://" + url_ms_o365_endpoints + request_string
 
@@ -1076,32 +1091,32 @@ class o365UrlManagement:
                     res = urllib2.urlopen(req_string, cafile=self.cafile)
 
             except urllib2.URLError as e:
-                self.log(1, self.log_level, "ERROR: Request to fetch O365 information failed. Aborting (1009): " + str(e.reason))
+                self.log(1, self.log_level, self.logdir, "ERROR: Request to fetch O365 information failed. Aborting (1009): " + str(e.reason))
                 print("ERROR: Request to fetch O365 information failed. Aborting (1009): [error-info] " + str(e.reason))
                 sys.exit(0)
             
             except Exception as e:
-                self.log(1, self.log_level, "ERROR: Request to fetch O365 information failed. Aborting (1032): " + str(e))
+                self.log(1, self.log_level, self.logdir, "ERROR: Request to fetch O365 information failed. Aborting (1032): " + str(e))
                 print("ERROR: Request to fetch O365 information failed. Aborting (1032): [error-info] " + str(e))
                 sys.exit(0)
 
             if res.getcode() != 200:
-                # MS O365 endpoints request failed - abort
-                self.log(1, self.log_level, "ERROR: ENDPOINTS request to MS web service failed. Aborting (1039).")
+                ## MS O365 endpoints request failed - abort
+                self.log(1, self.log_level, self.logdir, "ERROR: ENDPOINTS request to MS web service failed. Aborting (1039).")
                 print("ERROR: ENDPOINTS request to MS web service failed. Aborting (1039).")
                 sys.exit(0)
             else:
-                # Data fetched - validate and convert to JSON
+                ## Data fetched - validate and convert to JSON
                 try:
                     dict_o365_all = json.loads(res.read())    
-                    self.log(2, self.log_level, "ENDPOINTS request to MS web service was successful.")
+                    self.log(2, self.log_level, self.logdir, "ENDPOINTS request to MS web service was successful.")
                 except Exception as e:
-                    self.log(2, self.log_level, "Error: Good response but invalid (non-JSON) data encountered. Aborting (1024): " + str(e))
+                    self.log(2, self.log_level, self.logdir, "Error: Good response but invalid (non-JSON) data encountered. Aborting (1024): " + str(e))
                     print("Error: Good response but invalid (non-JSON) data encountered. Aborting (1024): [error-info] " + str(e))
                     sys.exit(0)
                 
 
-            # Process for each record(id) of the endpoint JSON data - this churns the JSON data into separate URL lists
+            ## Process for each record(id) of the endpoint JSON data - this churns the JSON data into separate URL lists
             for dict_o365_record in dict_o365_all:
                 service_area = str(dict_o365_record['serviceArea'])
                 id = str(dict_o365_record['id'])
@@ -1114,7 +1129,7 @@ class o365UrlManagement:
                         or (self.service_area_skype and service_area == "Skype"):
 
                         if self.output_url_categories or self.output_url_datagroups:
-                            # Append "urls" if existent in each record (full list)
+                            ## Append "urls" if existent in each record (full list)
                             if self.o365_categories_all and dict_o365_record.has_key('urls'):
                                 list_urls = list(dict_o365_record['urls'])
                                 for url in list_urls:
@@ -1211,7 +1226,7 @@ class o365UrlManagement:
                 ipv4_undup = []
                 ipv6_undup = []
 
-            self.log(1, self.log_level, "Number of unique ENDPOINTS to import : URL:" + str(len(urls_undup)) + ", IPv4 host/net:" + str(len(ipv4_undup)) + ", IPv6 host/net:" + str(len(ipv6_undup)))
+            self.log(1, self.log_level, self.logdir, "Number of unique ENDPOINTS to import : URL:" + str(len(urls_undup)) + ", IPv4 host/net:" + str(len(ipv4_undup)) + ", IPv6 host/net:" + str(len(ipv6_undup)))
 
 
             # -----------------------------------------------------------------------
@@ -1257,7 +1272,7 @@ class o365UrlManagement:
                 forcebool = "False"
 
             present = datetime.datetime.now()
-            self.log(1, self.log_level, "Completed O365 URL/IP address update process (force update: " + forcebool + "). Last run at: " + present.strftime("%Y-%m-%d %H:%M"))
+            self.log(1, self.log_level, self.logdir, "Completed O365 URL/IP address update process (force update: " + forcebool + "). Last run at: " + present.strftime("%Y-%m-%d %H:%M"))
             print("Completed O365 URL/IP address update process (force update: " + forcebool + "). Last run at: " + present.strftime("%Y-%m-%d %H:%M"))
             self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "URLs updated")
 
@@ -1321,7 +1336,7 @@ class o365UrlManagement:
         # Do this if no --config/configfile argument was passed. Use the default JSON config.
         else:
             # No injected config: build JSON iFile with default values
-            this_work_directory = "/shared/o365"
+            this_work_directory = "/tmp/o365"
 
             # Dump JSON config to a temporary file
             json_data = copy.deepcopy(json_config_data)
@@ -1347,10 +1362,10 @@ class o365UrlManagement:
             outfile.write(json_config_final)
 
         # Create the ifile configuration
-        result = commands.getoutput("tmsh create sys file ifile o365_config.json source-path file:" + this_work_directory + "/config.json")
+        result = commands.getoutput("tmsh -a create sys file ifile o365_config.json source-path file:" + this_work_directory + "/config.json")
         if "already exists" in result:
             # Overwrite existing content
-            result = commands.getoutput("tmsh modify sys file ifile o365_config.json source-path file:" + this_work_directory + "/config.json")
+            result = commands.getoutput("tmsh -a modify sys file ifile o365_config.json source-path file:" + this_work_directory + "/config.json")
         os.remove(this_work_directory + "/config.json")
         print("..Configuration iFile created: o365_config.json")
 
@@ -1370,38 +1385,18 @@ class o365UrlManagement:
 
         ## search /etc/cron.d/0hourly for matching (existing) line and replace
         if json_data["schedule"]["periods"] != "none":
-            has_sslo_o365 = False
-            with open("/etc/cron.d/0hourly", "r+") as file:
-                file_contents = file.read()
-                ## look for existing string
-                match = re.search(".*sslo_o365_update.*", file_contents)
-                if match:
-                    ## string patter exists - replace
-                    has_sslo_o365 = True
-                    text_pattern = re.compile(".*sslo_o365_update.*")
-                    file_contents = text_pattern.sub(cronstring + " root " + json_data["system"]["working_directory"] + "/sslo_o365_update.py", file_contents)
-                    file.seek(0)
-                    file.truncate()
-                    file.write(file_contents)
+            ## Get current user first
+            user = pwd.getpwuid( os.getuid() )[ 0 ]
 
-            ## if string pattern does not exit - add cronstring
-            if not has_sslo_o365:
-                with open("/etc/cron.d/0hourly", "a") as file:
-                    file.write(cronstring + " root " + json_data["system"]["working_directory"] + "/sslo_o365_update.py")
+            ## Clear out any existing script entry
+            result = commands.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
+
+            ## Write entry to bottom of the file
+            commands.getoutput("echo \"" + cronstring + " python " + json_data["system"]["working_directory"] + "/sslo_o365_update.py" + "\" >> /var/spool/cron/" + user)
 
         else:
             ## if this an upgrade and schedule is none, make sure an entry does not exist in 0hourly
-            with open("/etc/cron.d/0hourly", "r+") as file:
-                file_contents = file.read()
-                ## look for existing string
-                match = re.search(".*sslo_o365_update.*", file_contents)
-                if match:
-                    ## string patter exists - replace
-                    text_pattern = re.compile(".*sslo_o365_update.*")
-                    file_contents = text_pattern.sub("", file_contents)
-                    file.seek(0)
-                    file.truncate()
-                    file.write(file_contents)
+            result = commands.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
 
 
         print("..Installation complete\n\n")
@@ -1418,7 +1413,7 @@ class o365UrlManagement:
         print("\n..Uninstall in progress")
 
         # Delete the configuration iFile
-        result = commands.getoutput("tmsh delete sys file ifile o365_config.json")
+        result = commands.getoutput("tmsh -a delete sys file ifile o365_config.json")
         print("..Configuration iFile deleted")
 
         # Delete working directory files
@@ -1435,17 +1430,7 @@ class o365UrlManagement:
 
         # Delete the cron config
         ## search /etc/cron.d/0hourly for matching (existing) line and replace
-        with open("/etc/cron.d/0hourly", "r+") as file:
-            file_contents = file.read()
-            ## look for existing string
-            match = re.search(".*sslo_o365_update.*", file_contents)
-            if match:
-                ## string patter exists - replace
-                text_pattern = re.compile(".*sslo_o365_update.*")
-                file_contents = text_pattern.sub("", file_contents)
-                file.seek(0)
-                file.truncate()
-                file.write(file_contents)
+        result = commands.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
 
 
         if option == "none":
@@ -1455,31 +1440,31 @@ class o365UrlManagement:
             # Use this option to completely remove all working directories, data groups, and URL categories
 
             # Delete ltm data group objects
-            result = commands.getoutput("tmsh delete ltm data-group external o365_update.app/Office_365_Managed_All")
-            result = commands.getoutput("tmsh delete ltm data-group external o365_update.app/Office_365_Managed_Allow")
-            result = commands.getoutput("tmsh delete ltm data-group external o365_update.app/Office_365_Managed_IPv4")
-            result = commands.getoutput("tmsh delete ltm data-group external o365_update.app/Office_365_Managed_IPv6")
-            result = commands.getoutput("tmsh delete ltm data-group external o365_update.app/Office_365_Managed_Default")
-            result = commands.getoutput("tmsh delete ltm data-group external o365_update.app/Office_365_Managed_Optimized")
+            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_All")
+            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_Allow")
+            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_IPv4")
+            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_IPv6")
+            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_Default")
+            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_Optimized")
             print("..LTM data-group objects deleted")
 
             # Delete sys data group objects
-            result = commands.getoutput("tmsh delete sys file data-group o365_update.app/Office_365_Managed_All")
-            result = commands.getoutput("tmsh delete sys file data-group o365_update.app/Office_365_Managed_Allow")
-            result = commands.getoutput("tmsh delete sys file data-group o365_update.app/Office_365_Managed_Default")
-            result = commands.getoutput("tmsh delete sys file data-group o365_update.app/Office_365_Managed_IPv4")
-            result = commands.getoutput("tmsh delete sys file data-group o365_update.app/Office_365_Managed_IPv6")
+            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_All")
+            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_Allow")
+            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_Default")
+            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_IPv4")
+            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_IPv6")
             print("..System data-group objects deleted")
 
             # Delete URL categories
-            result = commands.getoutput("tmsh delete sys url-db url-category o365_update.app/Office_365_Managed_All")
-            result = commands.getoutput("tmsh delete sys url-db url-category o365_update.app/Office_365_Managed_Allow")
-            result = commands.getoutput("tmsh delete sys url-db url-category o365_update.app/Office_365_Managed_Default")
-            result = commands.getoutput("tmsh delete sys url-db url-category o365_update.app/Office_365_Managed_Optimized")
+            result = commands.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Managed_All")
+            result = commands.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Managed_Allow")
+            result = commands.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Managed_Default")
+            result = commands.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Managed_Optimized")
             print("..URL categories deleted")
 
             # Delete the application service
-            result = commands.getoutput("tmsh delete sys application service o365_update.app/o365_update")
+            result = commands.getoutput("tmsh -a delete sys application service o365_update.app/o365_update")
             print("..Application service deleted")
 
             print("..Full uninstall complete. All unassigned data groups and URL categories have also been deleted.\n\n")
