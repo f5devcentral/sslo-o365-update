@@ -15,7 +15,6 @@ version = "7.2.3"
 # Update 20210910 - to support additional enhancements (by Kevin Stewart)
 #   - Updated to support TMSH and crontab execution by non-root user
 #   - Updated log file to location under working directory
-#   - Changed default working directory to /tmp/o365/
 # Update 20210823 - to support additional enhancements (by Kevin Stewart)
 #   - Updated to address ip4/ip6 datagroup issue
 #   - Updated to collapse IPv4 and IPv6 datagroup configuration into a single option (on/off)
@@ -79,7 +78,7 @@ version = "7.2.3"
 #     - Run the script with the --uninstall option. This will remove the running configuration.
 #     - Run the script with the --full_uninstall option. This will remove the running configuration, URL categories, and datagroups.
 # 
-# The installed script creates a working directory (default: /tmp/o365), a configuration (iFile) json file, and scheduler.
+# The installed script creates a working directory (default: "/shared/o365"), a configuration (iFile) json file, and scheduler.
 #
 # The configuration json file controls the various settings of the script. See json_config_data variable below for defaults.
 # 
@@ -127,7 +126,7 @@ version = "7.2.3"
 #     "system":
 #         "log_level": 1                        -> 0=none, 1=normal, 2=verbose
 #         "ca_bundle": "ca-bundle.crt"          -> CA certificate bundle to use for validating the remote server certificate
-#         "working_directory":"/tmp/o365"    -> Working directory for running configuration files.
+#         "working_directory":"/shared/o365"    -> Working directory for running configuration files.
 #
 #     "schedule":
 #         "periods":"monthly|weekly|daily|none" -> When to trigger updates ('monthly', 'weekly', 'daily', or 'none') -- default(none)
@@ -197,7 +196,7 @@ json_config_data = {
     "system": {
         "log_level": 1,
         "ca_bundle": "ca-bundle.crt",
-        "working_directory": "/tmp/o365"
+        "working_directory": "/shared/o365"
     },
     "schedule":{
         "periods":"none",
@@ -616,13 +615,13 @@ class o365UrlManagement:
             if "working_directory" in jsonstr["system"]:
                 json_data["system"]["working_directory"] = jsonstr["system"]["working_directory"]
             else:
-                ## Default /tmp/o365
-                json_data["system"]["working_directory"] = "/tmp/o365"
+                ## Default "/shared/o365"
+                json_data["system"]["working_directory"] = "/shared/o365"
         else:
             ## No system block defined, set defaults
             json_data["system"]["log_level"] = 1
             json_data["system"]["ca_bundle"] = "ca-bundle.crt"
-            json_data["system"]["working_directory"] = "/tmp/o365"
+            json_data["system"]["working_directory"] = "/shared/o365"
 
         ## schedule
         if "schedule" in jsonstr:
@@ -1336,7 +1335,7 @@ class o365UrlManagement:
         # Do this if no --config/configfile argument was passed. Use the default JSON config.
         else:
             # No injected config: build JSON iFile with default values
-            this_work_directory = "/tmp/o365"
+            this_work_directory = "/shared/o365"
 
             # Dump JSON config to a temporary file
             json_data = copy.deepcopy(json_config_data)
