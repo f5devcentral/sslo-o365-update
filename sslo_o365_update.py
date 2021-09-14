@@ -151,7 +151,7 @@ version = "7.2.3"
 # further testing or modification.
 #-----------------------------------------------------------------------
 
-import urllib2, fnmatch, uuid, os, pwd, re, json, commands, datetime, sys, argparse, copy, base64, fileinput
+import urllib2, fnmatch, uuid, os, pwd, re, json, commands, datetime, sys, argparse, copy, ssl
 
 #-----------------------------------------------------------------------
 # Default JSON configuration
@@ -927,10 +927,20 @@ class o365UrlManagement:
                         self.proxyip = line.strip().split()[1]
                     if "proxy-port" in line:
                         self.proxyport = line.strip().split()[1]
+
+                ## Test if the proxyport is an integer or (string) service name
+                try:
+                    self.proxyport = int(self.proxyport)
+                except:
+                    ## proxyport is a string service name - resolve to port number
+                    result = commands.getoutput("getent services " + self.proxyport)
+                    result = re.sub('.*\s(\d+)\/.*', r'\1', result)
+                    self.proxyport = int(result)
+
             else:
                 self.proxyip = None
                 self.proxyport = None
-            
+
 
             ## -----------------------------------------------------------------------
             ## System CA bundle selection (defaults to ca-bundle.crt if none selected)
@@ -1011,28 +1021,39 @@ class o365UrlManagement:
 
             try:
                 if self.proxyip != None:
-                    print("\n proxyip not none")
-                    localproxy = 'http://' + self.proxyip + ':' + self.proxyport
-                    proxyctl = urllib2.ProxyHandler({'https': localproxy})
-                    opener = urllib2.build_opener(proxyctl)
+                    localproxy = 'http://' + self.proxyip + ':' + str(self.proxyport)
+                    proxyctl = urllib2.ProxyHandler({'https': localproxy,'http': localproxy})                    
+                    context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self.cafile)
+                    handler = urllib2.HTTPSHandler(context=context)
+                    opener = urllib2.build_opener(handler, proxyctl)
                     urllib2.install_opener(opener)
-                    res = urllib2.urlopen(req_string, cafile=self.cafile)
+                    res = urllib2.urlopen(req_string)
                 else:
-                    res = urllib2.urlopen(req_string, cafile=self.cafile)
+                    context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self.cafile)
+                    handler = urllib2.HTTPSHandler(context=context)
+                    opener = urllib2.build_opener(handler)
+                    urllib2.install_opener(opener)
+                    res = urllib2.urlopen(req_string)
             
             except urllib2.URLError as e:
+                present = datetime.datetime.now()
                 self.log(1, self.log_level, self.logdir, "ERROR: Request to fetch O365 information failed. Aborting (1004): " + str(e.reason))
+                self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "ERROR: Request to fetch O365 information failed. Aborting (1004): " + str(e.reason))
                 print("ERROR: Request to fetch O365 information failed. Aborting (1004): [error-info] " + str(e.reason))
                 sys.exit(0)
             
             except Exception as e:
+                present = datetime.datetime.now()
                 self.log(1, self.log_level, self.logdir, "ERROR: Request to fetch O365 information failed. Aborting (1005): " + str(e))
+                self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "ERROR: Request to fetch O365 information failed. Aborting (1005): " + str(e))
                 print("ERROR: Request to fetch O365 information failed. Aborting (1005): [error-info] " + str(e))
                 sys.exit(0)
 
             if res.getcode() != 200:
                 ## MS O365 version request failed - abort
+                present = datetime.datetime.now()
                 self.log(1, self.log_level, self.logdir, "ERROR: VERSION request to MS web service failed. Aborting (1006).")
+                self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "ERROR: VERSION request to MS web service failed. Aborting (1006).")
                 print("ERROR: VERSION request to MS web service failed. Aborting (1006).")
                 sys.exit(0)
             else:
@@ -1041,7 +1062,9 @@ class o365UrlManagement:
                     dict_o365_version = json.loads(res.read())
                     self.log(2, self.log_level, self.logdir, "VERSION request to MS web service was successful.")
                 except Exception as e:
+                    present = datetime.datetime.now()
                     self.log(2, self.log_level, self.logdir, "Error: Good response but invalid (non-JSON) data encountered. Aborting (1007): " + str(e))
+                    self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "Error: Good response but invalid (non-JSON) data encountered. Aborting (1007): " + str(e))
                     print("Error: Good response but invalid (non-JSON) data encountered. Aborting (1007): [error-info] " + str(e))
                     sys.exit(0)
 
@@ -1067,8 +1090,8 @@ class o365UrlManagement:
             elif ms_o365_version_latest == ms_o365_version_previous:
                 present = datetime.datetime.now()
                 self.log(1, self.log_level, self.logdir, "Latest MS O365 URL/IP Address list already exists: " + ms_o365_version_latest + ". Aborting at " + present.strftime("%Y-%m-%d %H:%M"))
-                print("Latest MS O365 URL/IP Address list already exists: " + ms_o365_version_latest + ". Aborting at " + present.strftime("%Y-%m-%d %H:%M"))
                 self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "URLs exists - update bypassed")
+                print("Latest MS O365 URL/IP Address list already exists: " + ms_o365_version_latest + ". Aborting at " + present.strftime("%Y-%m-%d %H:%M"))
                 sys.exit(0)
             
 
@@ -1082,26 +1105,38 @@ class o365UrlManagement:
             try:
                 if self.proxyip != None:
                     localproxy = 'http://' + self.proxyip + ':' + self.proxyport
-                    proxyctl = urllib2.ProxyHandler({'https': localproxy})
-                    opener = urllib2.build_opener(proxyctl)
+                    proxyctl = urllib2.ProxyHandler({'https': localproxy,'http': localproxy})                    
+                    context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self.cafile)
+                    handler = urllib2.HTTPSHandler(context=context)
+                    opener = urllib2.build_opener(handler, proxyctl)
                     urllib2.install_opener(opener)
-                    res = urllib2.urlopen(req_string, cafile=self.cafile)
+                    res = urllib2.urlopen(req_string)
                 else:
-                    res = urllib2.urlopen(req_string, cafile=self.cafile)
+                    context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self.cafile)
+                    handler = urllib2.HTTPSHandler(context=context)
+                    opener = urllib2.build_opener(handler)
+                    urllib2.install_opener(opener)
+                    res = urllib2.urlopen(req_string)
 
             except urllib2.URLError as e:
+                present = datetime.datetime.now()
                 self.log(1, self.log_level, self.logdir, "ERROR: Request to fetch O365 information failed. Aborting (1009): " + str(e.reason))
+                self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "ERROR: Request to fetch O365 information failed. Aborting (1009): " + str(e.reason))
                 print("ERROR: Request to fetch O365 information failed. Aborting (1009): [error-info] " + str(e.reason))
                 sys.exit(0)
             
             except Exception as e:
+                present = datetime.datetime.now()
                 self.log(1, self.log_level, self.logdir, "ERROR: Request to fetch O365 information failed. Aborting (1032): " + str(e))
+                self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "ERROR: Request to fetch O365 information failed. Aborting (1032): " + str(e))
                 print("ERROR: Request to fetch O365 information failed. Aborting (1032): [error-info] " + str(e))
                 sys.exit(0)
 
             if res.getcode() != 200:
                 ## MS O365 endpoints request failed - abort
+                present = datetime.datetime.now()
                 self.log(1, self.log_level, self.logdir, "ERROR: ENDPOINTS request to MS web service failed. Aborting (1039).")
+                self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "ERROR: ENDPOINTS request to MS web service failed. Aborting (1039).")
                 print("ERROR: ENDPOINTS request to MS web service failed. Aborting (1039).")
                 sys.exit(0)
             else:
@@ -1110,7 +1145,9 @@ class o365UrlManagement:
                     dict_o365_all = json.loads(res.read())    
                     self.log(2, self.log_level, self.logdir, "ENDPOINTS request to MS web service was successful.")
                 except Exception as e:
+                    present = datetime.datetime.now()
                     self.log(2, self.log_level, self.logdir, "Error: Good response but invalid (non-JSON) data encountered. Aborting (1024): " + str(e))
+                    self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "Error: Good response but invalid (non-JSON) data encountered. Aborting (1024): " + str(e))
                     print("Error: Good response but invalid (non-JSON) data encountered. Aborting (1024): [error-info] " + str(e))
                     sys.exit(0)
                 
@@ -1272,8 +1309,8 @@ class o365UrlManagement:
 
             present = datetime.datetime.now()
             self.log(1, self.log_level, self.logdir, "Completed O365 URL/IP address update process (force update: " + forcebool + "). Last run at: " + present.strftime("%Y-%m-%d %H:%M"))
-            print("Completed O365 URL/IP address update process (force update: " + forcebool + "). Last run at: " + present.strftime("%Y-%m-%d %H:%M"))
             self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "URLs updated")
+            print("Completed O365 URL/IP address update process (force update: " + forcebool + "). Last run at: " + present.strftime("%Y-%m-%d %H:%M"))
 
 
     # Install script function. 
