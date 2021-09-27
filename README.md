@@ -4,7 +4,7 @@ A small Python utility to download and maintain the dynamic set of Office 365 UR
 [![Releases](https://img.shields.io/github/v/release/f5devcentral/sslo-o365-update.svg)](https://github.com/f5devcentral/sslo-o365-update/releases)
 
 ### Script version
-7.2.3
+7.2.4
 
 ### SSL Orchestrator version support
 This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
@@ -200,7 +200,5 @@ The installed script creates a working directory (default: /shared/o365), a conf
 ---
 
 **Improvements**
-- Update 7.2.3 - to support additional enhancements
-   - Updated to support TMSH and crontab execution by non-root user
-   - Updated log file to location under working directory
-   - Changed default working directory to /tmp/o365/
+- Update 7.2.4 - to support additional enhancements
+   - Updated to support more correct sys.exit(1) and stderr output for errors
