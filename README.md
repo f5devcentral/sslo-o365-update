@@ -4,7 +4,7 @@ A small Python utility to download and maintain the dynamic set of Office 365 UR
 [![Releases](https://img.shields.io/github/v/release/f5devcentral/sslo-o365-update.svg)](https://github.com/f5devcentral/sslo-o365-update/releases)
 
 ### Script version
-7.2.4
+7.2.5
 
 ### SSL Orchestrator version support
 This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
