@@ -12,6 +12,7 @@ version = "7.2.5"
 # >>> NOTE: THIS VERSION OF THE OFFICE 365 SCRIPT IS SUPPORTED BY SSL ORCHESTRATOR 5.0 OR HIGHER <<<
 #
 # Updated for SSL Orchestrator by Kevin Stewart, SSA, F5 Networks
+# Update 20211119 - to update messages based on doc team review
 # Update 20211103 - to support logging to /var/log/apm
 #   - Updated to log certain events such as retry, error, or success to /var/log/apm
 #   - Updated to only retry if --force isn't passed, since the UI request would timeout
@@ -378,7 +379,7 @@ class o365UrlManagement:
                 o365_config = max(entry_array, key=os.path.getctime)
 
             if o365_config == "":
-                sys.stderr.write("\nIt appears that O365 URL updater's configuration has not been saved yet. Aborting (1000).\n\n[help-info] To install this script, issue the command \"" + os.path.basename(__file__) + " --install\"\n")
+                sys.stderr.write("\nIt appears that O365 URL Updater configuration has not been saved yet. Aborting (1000).\n\n[help-info] To install this script, issue the command \"" + os.path.basename(__file__) + " --install\"\n")
                 self.show_help()
 
             try:
@@ -421,7 +422,7 @@ class o365UrlManagement:
                 self.show_help()
 
         except:
-            sys.stderr.write("\nERROR: It appears that O365 URL updater's configuration has not been saved yet. Aborting (1002).\n\n[help-info] To install this script, issue the command \"" + os.path.basename(__file__) + " --install\"\n")
+            sys.stderr.write("\nERROR: It appears that O365 URL Updater configuration has not been saved yet. Aborting (1002).\n\n[help-info] To install this script, issue the command \"" + os.path.basename(__file__) + " --install\"\n")
             self.show_help()
 
 
@@ -1494,7 +1495,7 @@ class o365UrlManagement:
                 print("..Reading from serialized JSON config")
 
             except Exception as e:
-                sys.stderr.write("ERROR: Imported JSON configuration is corrupt. Please fix and try again. " + e.message + "\n")
+                sys.stderr.write("ERROR: Imported JSON configuration is corrupt. Please fix the JSON and try import again. " + e.message + "\n")
                 sys.stderr.flush()
                 sys.exit(1)
 
@@ -1525,7 +1526,7 @@ class o365UrlManagement:
                 print("..Reading from JSON config file")
 
             except Exception as e:
-                sys.stderr.write("ERROR: Imported JSON configuration is corrupt. Please fix and try again. " + e.message + "\n")
+                sys.stderr.write("ERROR: Imported JSON configuration is corrupt. Please fix the JSON and try import again. " + e.message + "\n")
                 sys.stderr.flush()
                 sys.exit(1)
 
@@ -1598,7 +1599,7 @@ class o365UrlManagement:
             result = commands.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
 
 
-        print("[install-info]O365 URL updater's configuration is saved successfully.")
+        print("[install-info] O365 URL updater configuration is saved successfully.")
 
         if self.force_update == True:
             print("\n[force-update]..Force update enabled - fetching Office365 URLs")
@@ -1638,7 +1639,7 @@ class o365UrlManagement:
 
 
         if option == "none":
-            print("[success-info] O365 URL updater configuration is delete successfully.\n Note that this utility will not remove files in the working directory, or any existing URL categories or data groups.\n\n")
+            print("[success-info] O365 URL updater configuration is deleted successfully.\n Note that this utility does not remove files from the working directory or any existing URL categories or data groups.\n\n")
 
         elif option == "full":
             # Use this option to completely remove all working directories, data groups, and URL categories
