@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 # O365 URL/IP update automation for BIG-IP
 
-version = "7.2.5"
+version = "7.2.6"
 
-# Last Modified: October 2021
+# Last Modified: January 2022
 # Update author: Kevin Stewart, Sr. SSA F5 Networks
 # Contributors: Regan Anderson, Brett Smith, F5 Networks
 # Original author: Makoto Omura, F5 Networks Japan G.K.
@@ -12,9 +12,10 @@ version = "7.2.5"
 # >>> NOTE: THIS VERSION OF THE OFFICE 365 SCRIPT IS SUPPORTED BY SSL ORCHESTRATOR 5.0 OR HIGHER <<<
 #
 # Updated for SSL Orchestrator by Kevin Stewart, SSA, F5 Networks
+# Update 20220106 - to make the script compatible with python2 and python3 with platform check
+# Update 20211231 - to make the script compatible with python3
 # Update 20211119 - to update messages based on doc team review
 # Update 20211103 - to support logging to /var/log/apm
-#   - Updated to log certain events such as retry, error, or success to /var/log/apm
 #   - Updated to only retry if --force isn't passed, since the UI request would timeout
 #   - Updated names of URL categories to match the names created by BIGIQ
 # Update 20211012 - to support additional enhancements
@@ -163,7 +164,14 @@ version = "7.2.5"
 # further testing or modification.
 #-----------------------------------------------------------------------
 
-import urllib2, fnmatch, uuid, os, pwd, re, json, commands, time, datetime, sys, argparse, copy, ssl
+import platform, fnmatch, uuid, os, pwd, re, json, time, datetime, sys, argparse, copy, ssl
+
+if platform.python_version().startswith("2."):
+    import commands as shell
+    import urllib2 as urlrequest
+elif platform.python_version().startswith("3."):
+    import subprocess as shell
+    from urllib import request as urlrequest
 
 #-----------------------------------------------------------------------
 # Default JSON configuration
@@ -327,7 +335,7 @@ class o365UrlManagement:
         ## local1 logs to /var/log/apm, and the SSLO product subset is C4.
         ## Use 1000 for log msg id to not collide with log messages on BIGIP
         log_cmd = "/usr/bin/logger -p local1." + level + " \"01c41000: " + msg + "\""
-        result = commands.getoutput(log_cmd)
+        result = shell.getoutput(log_cmd)
 
 
     ##-----------------------------------------------------------------------
@@ -886,7 +894,7 @@ class o365UrlManagement:
             outfile.write(json_config_final)
 
         ## Update the ifile configuration / delete temporary file
-        result = commands.getoutput("tmsh -a modify sys file ifile o365_update.app/o365_config.json source-path file:" + config_data["system"]["working_directory"] + "/config.json")
+        result = shell.getoutput("tmsh -a modify sys file ifile o365_update.app/o365_config.json source-path file:" + config_data["system"]["working_directory"] + "/config.json")
         os.remove(config_data["system"]["working_directory"] + "/config.json")
 
 
@@ -905,17 +913,17 @@ class o365UrlManagement:
         str_urls_to_bypass = ""
 
         ## Create new or clean out existing URL category - add the latest version as first entry
-        result = commands.getoutput("tmsh -a list sys application service o365_update.app/o365_update")
+        result = shell.getoutput("tmsh -a list sys application service o365_update.app/o365_update")
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
+            result2 = shell.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
             self.log(2, self.log_level, self.logdir, "Application service not found. Creating o365_update.app/o365_update")
 
-        result = commands.getoutput("tmsh -a list sys url-db url-category o365_update.app/" + url_file)
+        result = shell.getoutput("tmsh -a list sys url-db url-category o365_update.app/" + url_file)
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh -a create /sys url-db url-category o365_update.app/" + url_file + " display-name " + url_file + " app-service o365_update.app/o365_update urls replace-all-with { https://" + version_latest + "/ { type exact-match } } default-action allow")
+            result2 = shell.getoutput("tmsh -a create /sys url-db url-category o365_update.app/" + url_file + " display-name " + url_file + " app-service o365_update.app/o365_update urls replace-all-with { https://" + version_latest + "/ { type exact-match } } default-action allow")
             self.log(2, self.log_level, self.logdir, "O365 custom URL category (" + url_file + ") not found. Created new O365 custom category.")
         else:
-            result2 = commands.getoutput("tmsh -a modify /sys url-db url-category o365_update.app/" + url_file + " display-name " + url_file + " app-service o365_update.app/o365_update urls replace-all-with { https://" + version_latest + "/ { type exact-match } } default-action allow")
+            result2 = shell.getoutput("tmsh -a modify /sys url-db url-category o365_update.app/" + url_file + " display-name " + url_file + " app-service o365_update.app/o365_update urls replace-all-with { https://" + version_latest + "/ { type exact-match } } default-action allow")
             self.log(2, self.log_level, self.logdir, "O365 custom URL category (" + url_file + ") exists. Clearing entries for new data.")
 
         ## Loop through URLs and insert into URL category
@@ -936,7 +944,7 @@ class o365UrlManagement:
                 str_urls_to_bypass = str_urls_to_bypass + " urls add { \"https://" + url + "/\" { type exact-match } } urls add { \"http://" + url + "/\" { type exact-match } }"
 
         ## Import the URL entries
-        result = commands.getoutput("tmsh -a modify /sys url-db url-category o365_update.app/" + url_file + " app-service o365_update.app/o365_update" + str_urls_to_bypass)
+        result = shell.getoutput("tmsh -a modify /sys url-db url-category o365_update.app/" + url_file + " app-service o365_update.app/o365_update" + str_urls_to_bypass)
 
 
     ##-----------------------------------------------------------------------
@@ -959,23 +967,23 @@ class o365UrlManagement:
         fout.close()
 
         ## Create URL data group files in TMSH if they don't already exist
-        result = commands.getoutput("tmsh -a list sys application service o365_update.app/o365_update")
+        result = shell.getoutput("tmsh -a list sys application service o365_update.app/o365_update")
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
+            result2 = shell.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
             self.log(2, self.log_level, self.logdir, "Application service not found. Creating o365_update.app/o365_update")
 
-        result = commands.getoutput("tmsh -a list /sys file data-group o365_update.app/" + url_file)
+        result = shell.getoutput("tmsh -a list /sys file data-group o365_update.app/" + url_file)
         if "was not found" in result:
             ## Create (sys) external data group
-            result2 = commands.getoutput("tmsh -a create /sys file data-group o365_update.app/" + url_file + " separator \":=\" source-path file:" + self.work_directory + "/" + url_file + " type string")
+            result2 = shell.getoutput("tmsh -a create /sys file data-group o365_update.app/" + url_file + " separator \":=\" source-path file:" + self.work_directory + "/" + url_file + " type string")
             ## Create (ltm) link to external data group
-            result3 = commands.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
+            result3 = shell.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
             self.log(2, self.log_level, self.logdir, "O365 URL data group (" + url_file + ") not found. Created new data group.")
         else:
             ## Update (sys) external data group
-            result2 = commands.getoutput("tmsh -a modify /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file)
+            result2 = shell.getoutput("tmsh -a modify /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file)
             ## Update (ltm) link to external data group
-            result3 = commands.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
+            result3 = shell.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
             self.log(2, self.log_level, self.logdir, "O365 URL data group (" + url_file + ") exists. Updated existing data group.")
 
         os.remove(self.work_directory + "/" + url_file)
@@ -999,19 +1007,19 @@ class o365UrlManagement:
         fout.close()
 
         ## Create URL data group files in TMSH if they don't already exist
-        result = commands.getoutput("tmsh -a list sys application service o365_update.app/o365_update")
+        result = shell.getoutput("tmsh -a list sys application service o365_update.app/o365_update")
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
+            result2 = shell.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
             self.log(2, self.log_level, self.logdir, "Application service not found. Creating o365_update.app/o365_update")
 
-        result = commands.getoutput("tmsh -a list /sys file data-group o365_update.app/" + url_file)
+        result = shell.getoutput("tmsh -a list /sys file data-group o365_update.app/" + url_file)
         if "was not found" in result:
-            result2 = commands.getoutput("tmsh -a create /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file + " type ip")
-            result3 = commands.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
+            result2 = shell.getoutput("tmsh -a create /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file + " type ip")
+            result3 = shell.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
             self.log(2, self.log_level, self.logdir, "O365 IP data group (" + url_file + ") not found. Created new data group.")
         else:
-            result2 = commands.getoutput("tmsh -a modify /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file)
-            result3 = commands.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
+            result2 = shell.getoutput("tmsh -a modify /sys file data-group o365_update.app/" + url_file + " source-path file:" + self.work_directory + "/" + url_file)
+            result3 = shell.getoutput("tmsh -a create /ltm data-group external o365_update.app/" + url_file + " external-file-name o365_update.app/" + url_file)
             self.log(2, self.log_level, self.logdir, "O365 IP data group (" + url_file + ") exists. Updated existing data group.")
 
         os.remove(self.work_directory + "/" + url_file)
@@ -1041,20 +1049,20 @@ class o365UrlManagement:
             try:
                 if self.proxyip != None:
                     localproxy = 'http://' + self.proxyip + ':' + str(self.proxyport)
-                    proxyctl = urllib2.ProxyHandler({'https': localproxy,'http': localproxy})
+                    proxyctl = urlrequest.ProxyHandler({'https': localproxy,'http': localproxy})
                     context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self.cafile)
-                    handler = urllib2.HTTPSHandler(context=context)
-                    opener = urllib2.build_opener(handler, proxyctl)
-                    urllib2.install_opener(opener)
-                    res = urllib2.urlopen(req_string)
+                    handler = urlrequest.HTTPSHandler(context=context)
+                    opener = urlrequest.build_opener(handler, proxyctl)
+                    urlrequest.install_opener(opener)
+                    res = urlrequest.urlopen(req_string)
                 else:
                     context = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=self.cafile)
-                    handler = urllib2.HTTPSHandler(context=context)
-                    opener = urllib2.build_opener(handler)
-                    urllib2.install_opener(opener)
-                    res = urllib2.urlopen(req_string)
+                    handler = urlrequest.HTTPSHandler(context=context)
+                    opener = urlrequest.build_opener(handler)
+                    urlrequest.install_opener(opener)
+                    res = urlrequest.urlopen(req_string)
 
-            except urllib2.URLError as e:
+            except urlrequest.URLError as e:
                 present = datetime.datetime.now()
                 self.log(1, self.log_level, self.logdir, "ERROR: Attempt (" + str(count) + ") to request O365 information failed (1004): " + str(e.reason) + "\n")
                 self.event_log(1, "ERROR: Attempt (" + str(count) + ") to request O365 information failed (1004): " + str(e.reason) + "\n")
@@ -1143,7 +1151,7 @@ class o365UrlManagement:
             ## -----------------------------------------------------------------------
             ## System Proxy Detection (System : Configuration : Devices : Upstream Proxy)
             ## -----------------------------------------------------------------------
-            result = commands.getoutput("tmsh -a list sys management-proxy-config proxy-ip-addr proxy-port")
+            result = shell.getoutput("tmsh -a list sys management-proxy-config proxy-ip-addr proxy-port")
             if result != "":
                 for line in result.split('\n'):
                     if "proxy-ip-addr" in line:
@@ -1156,7 +1164,7 @@ class o365UrlManagement:
                     self.proxyport = int(self.proxyport)
                 except:
                     ## proxyport is a string service name - resolve to port number
-                    result = commands.getoutput("getent services " + self.proxyport)
+                    result = shell.getoutput("getent services " + self.proxyport)
                     result = re.sub('.*\s(\d+)\/.*', r'\1', result)
                     self.proxyport = int(result)
 
@@ -1168,7 +1176,7 @@ class o365UrlManagement:
             ## -----------------------------------------------------------------------
             ## System CA bundle selection (defaults to ca-bundle.crt if none selected)
             ## -----------------------------------------------------------------------
-            result = commands.getoutput("tmsh -a list sys file ssl-cert " + self.ca_bundle + " system-path")
+            result = shell.getoutput("tmsh -a list sys file ssl-cert " + self.ca_bundle + " system-path")
             if result != "":
                 for line in result.split('\n'):
                     if "system-path" in line:
@@ -1559,13 +1567,13 @@ class o365UrlManagement:
             outfile.write(json_config_final)
 
         # Create the application service
-        result = commands.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
+        result = shell.getoutput("tmsh -a create sys application service o365_update traffic-group traffic-group-local-only device-group none")
 
         # Create the ifile configuration
-        result = commands.getoutput("tmsh -a create sys file ifile o365_update.app/o365_config.json source-path file:" + this_work_directory + "/config.json")
+        result = shell.getoutput("tmsh -a create sys file ifile o365_update.app/o365_config.json source-path file:" + this_work_directory + "/config.json")
         if "already exists" in result:
             # Overwrite existing content
-            result = commands.getoutput("tmsh -a modify sys file ifile o365_update.app/o365_config.json source-path file:" + this_work_directory + "/config.json")
+            result = shell.getoutput("tmsh -a modify sys file ifile o365_update.app/o365_config.json source-path file:" + this_work_directory + "/config.json")
         os.remove(this_work_directory + "/config.json")
         print("..Configuration iFile created: o365_config.json")
 
@@ -1589,14 +1597,14 @@ class o365UrlManagement:
             user = pwd.getpwuid( os.getuid() )[ 0 ]
 
             ## Clear out any existing script entry
-            result = commands.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
+            result = shell.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
 
             ## Write entry to bottom of the file
-            commands.getoutput("echo \"" + cronstring + " python " + json_data["system"]["working_directory"] + "/sslo_o365_update.py" + "\" >> /var/spool/cron/" + user)
+            shell.getoutput("echo \"" + cronstring + " python " + json_data["system"]["working_directory"] + "/sslo_o365_update.py" + "\" >> /var/spool/cron/" + user)
 
         else:
             ## if this an upgrade and schedule is none, make sure an entry does not exist in 0hourly
-            result = commands.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
+            result = shell.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
 
 
         print("[install-info] O365 URL updater configuration is saved successfully.")
@@ -1618,7 +1626,7 @@ class o365UrlManagement:
         print("\n..Uninstall in progress")
 
         # Delete the configuration iFile
-        result = commands.getoutput("tmsh -a delete sys file ifile o365_update.app/o365_config.json")
+        result = shell.getoutput("tmsh -a delete sys file ifile o365_update.app/o365_config.json")
         print("..Configuration iFile deleted")
 
         # Delete working directory files
@@ -1635,7 +1643,7 @@ class o365UrlManagement:
 
         # Delete the cron config
         ## search /etc/cron.d/0hourly for matching (existing) line and replace
-        result = commands.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
+        result = shell.getoutput("crontab -l | grep -v 'sslo_o365' | crontab")
 
 
         if option == "none":
@@ -1645,31 +1653,31 @@ class o365UrlManagement:
             # Use this option to completely remove all working directories, data groups, and URL categories
 
             # Delete ltm data group objects
-            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_All")
-            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_Allow")
-            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_IPv4")
-            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_IPv6")
-            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_Default")
-            result = commands.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_Optimized")
+            result = shell.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_All")
+            result = shell.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_Allow")
+            result = shell.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_IPv4")
+            result = shell.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_IPv6")
+            result = shell.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_Default")
+            result = shell.getoutput("tmsh -a delete ltm data-group external o365_update.app/Office_365_Managed_Optimized")
             print("..LTM data-group objects deleted")
 
             # Delete sys data group objects
-            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_All")
-            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_Allow")
-            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_Default")
-            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_IPv4")
-            result = commands.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_IPv6")
+            result = shell.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_All")
+            result = shell.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_Allow")
+            result = shell.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_Default")
+            result = shell.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_IPv4")
+            result = shell.getoutput("tmsh -a delete sys file data-group o365_update.app/Office_365_Managed_IPv6")
             print("..System data-group objects deleted")
 
             # Delete URL categories
-            result = commands.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_All\(Managed\)")
-            result = commands.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Allow\(Managed\)")
-            result = commands.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Default\(Managed\)")
-            result = commands.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Optimized\(Managed\)")
+            result = shell.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_All\(Managed\)")
+            result = shell.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Allow\(Managed\)")
+            result = shell.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Default\(Managed\)")
+            result = shell.getoutput("tmsh -a delete sys url-db url-category o365_update.app/Office_365_Optimized\(Managed\)")
             print("..URL categories deleted")
 
             # Delete the application service
-            result = commands.getoutput("tmsh -a delete sys application service o365_update.app/o365_update")
+            result = shell.getoutput("tmsh -a delete sys application service o365_update.app/o365_update")
             print("..Application service deleted")
             print("[success-info] ..Full uninstall complete. All unassigned data groups and URL categories have also been deleted.\n\n")
 
