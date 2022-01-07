@@ -4,7 +4,7 @@ A small Python utility to download and maintain the dynamic set of Office 365 UR
 [![Releases](https://img.shields.io/github/v/release/f5devcentral/sslo-o365-update.svg)](https://github.com/f5devcentral/sslo-o365-update/releases)
 
 ### Script version
-7.2.5
+7.2.6
 
 ### SSL Orchestrator version support
 This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
@@ -12,7 +12,7 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 ### How to install 
 - Download the script onto the F5 BIG-IP:
 
-  `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.3/sslo_o365_update.py -o sslo_o365_update.py`
+  `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.6/sslo_o365_update.py -o sslo_o365_update.py`
 
 - Run the script with one of the following install options. Note that the install options create or replace an existing configuration, but **will not** by itself initiate an O365 URL fetch. To force a fetch on install, include the `--force` option.
 
@@ -128,6 +128,8 @@ The installed script creates a working directory (default: /shared/o365), a conf
         "log_level": 1                       -> 0 = no logging, 1 = normal logging, 2 = verbose logging
         "ca_bundle": "ca-bundle.crt"         -> The CA certificate bundle to use for validating the remote server certificate
         "working_directory": "/shared/o365"  -> The working directory to install and run the script from
+        "retry_attempts": 3                  -> Number of attempts to make if initial remote call fails
+        "retry_delay": 300                   -> Delay between attempts
     }
    
 ***System-level configuration settings***
@@ -185,7 +187,9 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "system": {
         "log_level": 1,
         "ca_bundle": "ca-bundle.crt",
-        "working_directory": "/tmp/o365"
+        "working_directory": "/tmp/o365",
+        "retry_attempts":3,
+        "retry_delay":300
     },
     "schedule":{
         "periods":"none",
@@ -200,5 +204,5 @@ The installed script creates a working directory (default: /shared/o365), a conf
 ---
 
 **Improvements**
-- Update 7.2.4 - to support additional enhancements
-   - Updated to support more correct sys.exit(1) and stderr output for errors
+- Update 7.2.6 - to support additional enhancements
+   - Updated to make the script compatible with python2 and python3 with platform check
