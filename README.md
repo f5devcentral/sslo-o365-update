@@ -23,7 +23,7 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   - `python sslo_o365_update.py --install --config <JSON string>`  -- this option installs with a configuration passed in via serialized JSON string. Any attributes not defined will take default values.
 
   - `python sslo_o365_update.py --install --configfile <JSON file>`  -- this option installs with a configuration passed in via JSON file. Any attributes not defined will take default values.  
-</summary>
+</details>
 
   
 ### How to modify the configuration
