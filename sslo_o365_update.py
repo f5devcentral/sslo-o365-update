@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 # O365 URL/IP update automation for BIG-IP
 
-version = "7.2.6"
+version = "7.2.7"
 
-# Last Modified: January 2022
+# Last Modified: March 2022
 # Update author: Kevin Stewart, Sr. SSA F5 Networks
 # Contributors: Regan Anderson, Brett Smith, F5 Networks
 # Original author: Makoto Omura, F5 Networks Japan G.K.
@@ -12,6 +12,7 @@ version = "7.2.6"
 # >>> NOTE: THIS VERSION OF THE OFFICE 365 SCRIPT IS SUPPORTED BY SSL ORCHESTRATOR 5.0 OR HIGHER <<<
 #
 # Updated for SSL Orchestrator by Kevin Stewart, SSA, F5 Networks
+# Update 20220330 - to enable separate allow, optimize, default, and all URL include blocks
 # Update 20220106 - to make the script compatible with python2 and python3 with platform check
 # Update 20211231 - to make the script compatible with python3
 # Update 20211119 - to update messages based on doc team review
@@ -212,7 +213,10 @@ json_config_data = {
         ".public-trust.com",
         "platform.linkedin.com"
     ],
-    "included_urls": [],
+    "included_urls_allow": [],
+    "included_urls_optimize": [],
+    "included_urls_default": [],
+    "included_urls_all": [],
     "excluded_ips": [],
     "system": {
         "log_level": 1,
@@ -274,7 +278,10 @@ class o365UrlManagement:
         self.o365_categories_allow = ""
         self.only_required = ""
         self.excluded_urls = ""
-        self.included_urls = ""
+        self.included_urls_allow = ""
+        self.included_urls_optimize = ""
+        self.included_urls_default = ""
+        self.included_urls_all = ""
         self.excluded_ips = ""
         self.log_level = ""
         self.ca_bundle = ""
@@ -411,7 +418,10 @@ class o365UrlManagement:
                 self.o365_categories_allow       = self.config_data["o365_categories"]["allow"]
                 self.only_required               = self.config_data["only_required"]
                 self.excluded_urls               = self.config_data["excluded_urls"]
-                self.included_urls               = self.config_data["included_urls"]
+                self.included_urls_allow         = self.config_data["included_urls_allow"]
+                self.included_urls_optimize      = self.config_data["included_urls_optimize"]
+                self.included_urls_default       = self.config_data["included_urls_default"]
+                self.included_urls_all           = self.config_data["included_urls_all"]
                 self.excluded_ips                = self.config_data["excluded_ips"]
                 self.log_level                   = self.config_data["system"]["log_level"]
                 self.ca_bundle                   = self.config_data["system"]["ca_bundle"]
@@ -642,12 +652,33 @@ class o365UrlManagement:
             ## Default []
             json_data["excluded_urls"] = []
 
-        ## included_urls
-        if "included_urls" in jsonstr:
-            json_data["included_urls"] = jsonstr["included_urls"]
+        ## included_urls_allow
+        if "included_urls_allow" in jsonstr:
+            json_data["included_urls_allow"] = jsonstr["included_urls_allow"]
         else:
             ## Default []
-            json_data["included_urls"] = []
+            json_data["included_urls_allow"] = []
+
+        ## included_urls_optimize
+        if "included_urls_optimize" in jsonstr:
+            json_data["included_urls_optimize"] = jsonstr["included_urls_optimize"]
+        else:
+            ## Default []
+            json_data["included_urls_optimize"] = []
+
+        ## included_urls_default
+        if "included_urls_default" in jsonstr:
+            json_data["included_urls_default"] = jsonstr["included_urls_default"]
+        else:
+            ## Default []
+            json_data["included_urls_default"] = []
+
+        ## included_urls_all
+        if "included_urls_all" in jsonstr:
+            json_data["included_urls_all"] = jsonstr["included_urls_all"]
+        else:
+            ## Default []
+            json_data["included_urls_all"] = []
 
         ## excluded_ips
         if "excluded_ips" in jsonstr:
@@ -1107,6 +1138,69 @@ class o365UrlManagement:
 
 
     ##-----------------------------------------------------------------------
+    ## url_converter
+    ##  Purpose: takes the raw url list and converts to url category or datagroup string format
+    ##  Parameters: 
+    ##      url_list: list of raw URLs
+    ##      target: [category, datagroup] - determines output format
+    ##  Returns: new url list with formatted strings
+    ##-----------------------------------------------------------------------
+    def url_converter(self, url_list, target):
+        formatted_urls = []
+        if target == "category":
+            for url in url_list:
+                url = url.lower()
+                if url.startswith('*.'):
+                    ## example: *.example.com
+                    url_processed = re.sub('\*', '\\*', url)
+                    if url.endswith('/'):
+                        formatted_urls.append("urls add { \"https://" + url_processed + "\" { type glob-match } }")
+                        formatted_urls.append("urls add { \"http://" + url_processed + "\" { type glob-match } }")
+                    else:
+                        formatted_urls.append("urls add { \"https://" + url_processed + "/\" { type glob-match } }")
+                        formatted_urls.append("urls add { \"http://" + url_processed + "/\" { type glob-match } }")
+                elif url.startswith("http://*."):
+                    ## example: http://*.example.com or http://*.example.com/
+                    url_processed = re.sub('\*', '\\*', url)
+                    if url.endswith('/'):
+                        formatted_urls.append("urls add { \"" + url_processed + "\" { type glob-match } }")
+                    else:
+                        formatted_urls.append("urls add { \"" + url_processed + "/\" { type glob-match } }")
+                elif url.startswith("https://*."):
+                    ## example: https://*.example.com or https://*.example.com/
+                    url_processed = re.sub('\*', '\\*', url)
+                    if url.endswith('/'):
+                        formatted_urls.append("urls add { \"" + url_processed + "\" { type glob-match } }")
+                    else:
+                        formatted_urls.append("urls add { \"" + url_processed + "/\" { type glob-match } }")
+                elif url.startswith("http://"):
+                    ## example: http://www.example.com or http://www.example.com/
+                    if url.endswith('/'):
+                        formatted_urls.append("urls add { \"" + url + "\" { type exact-match } }")
+                    else:
+                        formatted_urls.append("urls add { \"" + url + "/\" { type exact-match } }")
+                elif url.startswith("https://"):
+                    ## example: https://www.example.com or https://www.example.com/
+                    if url.endswith('/'):
+                        formatted_urls.append("urls add { \"" + url + "\" { type exact-match } }")
+                    else:
+                        formatted_urls.append("urls add { \"" + url + "/\" { type exact-match } }")
+                else:
+                    ## example: www.example.com
+                    if url.endswith('/'):
+                        formatted_urls.append("urls add { \"https://" + url + "\" { type exact-match } }")
+                        formatted_urls.append("urls add { \"http://" + url + "\" { type exact-match } }")
+                    else:
+                        formatted_urls.append("urls add { \"https://" + url + "/\" { type exact-match } }")
+                        formatted_urls.append("urls add { \"http://" + url + "/\" { type exact-match } }")
+
+        elif target == "datagroup":
+            pass
+        
+        return formatted_urls
+
+
+    ##-----------------------------------------------------------------------
     ## Update O365 function
     ##  Purpose: main work function. Processes O365 URLs and updates URL categories and datagroups
     ##  Parameters: none
@@ -1368,9 +1462,21 @@ class o365UrlManagement:
             # Re-process URLs/IPs to add included urls (all-urls category)
             # -----------------------------------------------------------------------
             if self.output_url_categories or self.output_url_datagroups:
-                # Append included_urls
-                for url in self.included_urls:
+                # Append included_urls_all
+                for url in self.included_urls_all:
                     list_urls_to_bypass.append(url)
+
+                # Append included_urls_optimize
+                for url in self.included_urls_optimize:
+                    list_optimized_urls_to_bypass.append(url)
+
+                # Append included_urls_default
+                for url in self.included_urls_default:
+                    list_default_urls_to_bypass.append(url)
+
+                # Append included_urls_allow
+                for url in self.included_urls_allow:
+                    list_allow_urls_to_bypass.append(url)
 
 
             # -----------------------------------------------------------------------
