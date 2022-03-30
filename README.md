@@ -31,29 +31,33 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   
   
 <details>
-<summary><b>How to modify the configuration</b></summary>  
-- Initiate the `--install` process again with a new `--config` or `--configfile` argument.
-
-  See the JSON configuration template below. Anything passed into --config or --configfile must be in the correct JSON format. For example, to change only the endpoint value:
+<summary><b>How to modify the configuration</b></summary>
   
-  `--install --config '{"endpoint": "Worldwide"}'`
+  - Initiate the `--install` process again with a new `--config` or `--configfile` argument.
+
+    See the JSON configuration template below. Anything passed into --config or --configfile must be in the correct JSON format. For example, to change only the endpoint value:
+  
+    `--install --config '{"endpoint": "Worldwide"}'`
   
   To change the schedule frequency (periods):
   
-  `--install --config '{"schedule":{"periods":"monthly"}}'`
+    `--install --config '{"schedule":{"periods":"monthly"}}'`
   
   Anything not specifically defined will take the default values. See "default configuration" below.
+  
 </details>
 
   
   
 <details>
 <summary><b>How to force an update</b></summary>
-- Run the script with the `--force` option, either during install to immediately force a URL fetch, or at any time.
+  
+  - Run the script with the `--force` option, either during install to immediately force a URL fetch, or at any time.
 
-  `python sslo_o365_update.py --install --force`
+    `python sslo_o365_update.py --install --force`
   <br />
-  `python sslo_o365_update.py --force`
+    `python sslo_o365_update.py --force`
+  
 </details>  
 
   
