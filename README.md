@@ -4,12 +4,14 @@ A small Python utility to download and maintain the dynamic set of Office 365 UR
 [![Releases](https://img.shields.io/github/v/release/f5devcentral/sslo-o365-update.svg)](https://github.com/f5devcentral/sslo-o365-update/releases)
 
 ### Script version
-7.2.6
+7.2.7
 
 ### SSL Orchestrator version support
 This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 
-### How to install 
+
+<details>
+<summary>How to install</summary>
 - Download the script onto the F5 BIG-IP:
 
   `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.6/sslo_o365_update.py -o sslo_o365_update.py`
@@ -21,8 +23,9 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   - `python sslo_o365_update.py --install --config <JSON string>`  -- this option installs with a configuration passed in via serialized JSON string. Any attributes not defined will take default values.
 
   - `python sslo_o365_update.py --install --configfile <JSON file>`  -- this option installs with a configuration passed in via JSON file. Any attributes not defined will take default values.  
+</summary>
 
-
+  
 ### How to modify the configuration
 - Initiate the `--install` process again with a new `--config` or `--configfile` argument.
 
@@ -57,8 +60,19 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 - Run the script with the `--full_uninstall` option. This will remove the configurtion file, scheduler, working directory files, URL categories, and datagroups.
 
 
+### How to upgrade from previous version
+- Save the running config to a file:
+
+  `python sslo_o365_update.py --printconfig > config.json`
+
+- Install the new version and point to the config file:
+
+  `python sslo_o365_update_v7.2.7.py --install --configfile config.json`
+
+
 ### HA considerations
 - Perform the install operations on both units in an HA environment and then sync. The script runs independently on each peer and will not trigger an out-of-sync indication when updates are made.
+
 
 ### Egress proxy considerations
 - The script uses system outbound proxy settings (System : Configuration : Device : Upstream Proxy).
