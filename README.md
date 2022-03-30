@@ -10,6 +10,7 @@ A small Python utility to download and maintain the dynamic set of Office 365 UR
 This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 
 
+
 <details>
 <summary><b>How to install</b></summary>
 - Download the script onto the F5 BIG-IP:
@@ -26,7 +27,9 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 </details>
 
   
-### How to modify the configuration
+  
+<details>
+<summary><b>How to modify the configuration</b></summary>  
 - Initiate the `--install` process again with a new `--config` or `--configfile` argument.
 
   See the JSON configuration template below. Anything passed into --config or --configfile must be in the correct JSON format. For example, to change only the endpoint value:
@@ -38,29 +41,41 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   `--install --config '{"schedule":{"periods":"monthly"}}'`
   
   Anything not specifically defined will take the default values. See "default configuration" below.
+</details>
 
-
-### How to force an update
+  
+  
+<details>
+<summary><b>How to force an update</b></summary>
 - Run the script with the `--force` option, either during install to immediately force a URL fetch, or at any time.
 
   `python sslo_o365_update.py --install --force`
   <br />
   `python sslo_o365_update.py --force`
-  
+</details>  
 
-### Show the running configuration
+  
+  
+<details>
+<summary><b>How to show the running configuration</b></summary>  
 - Run the script with the `--printconfig` option to display the running configuration.
 
   `python sslo_o365_update.py --printconfig`
+</details>
 
+  
 
-### How to uninstall
+<details>
+<summary><b>How to uninstall</b></summary>
 - Run the script with the `--uninstall` option. This will remove the configuration file and scheduler. The URL categories, datagroups, and working directory will remain.
 
 - Run the script with the `--full_uninstall` option. This will remove the configurtion file, scheduler, working directory files, URL categories, and datagroups.
+</details>
 
-
-### How to upgrade from previous version
+  
+  
+<details>
+<summary><b>How to upgrade from previous version</b></summary>  
 - Save the running config to a file:
 
   `python sslo_o365_update.py --printconfig > config.json`
@@ -68,15 +83,21 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 - Install the new version and point to the config file:
 
   `python sslo_o365_update_v7.2.7.py --install --configfile config.json`
+</details>
 
-
-### HA considerations
+  
+  
+<details>
+<summary><b>HA considerations</b></summary>  
 - Perform the install operations on both units in an HA environment and then sync. The script runs independently on each peer and will not trigger an out-of-sync indication when updates are made.
+</details>
+  
 
-
-### Egress proxy considerations
+<details>
+<summary><b>Egress proxy considerations</b></summary>  
 - The script uses system outbound proxy settings (System : Configuration : Device : Upstream Proxy).
-
+</details>
+  
 ---
 
 ### The configuration environment
