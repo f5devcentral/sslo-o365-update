@@ -164,7 +164,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "excluded_urls": []
 
 
-***Included URLs (ALL)** - Includes a set of URLs in the **ALL** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. *.example.com).*     
+**Included URLs (ALL)** - Includes a set of URLs in the **ALL** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. *.example.com).     
 
     "included_urls_all": [
       "www.foo.com",
@@ -172,7 +172,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
       "*.test.com"
     ] 
 
-***Included URLs (OPTIMIZE)** - Includes a set of URLs in the **OPTIMIZE** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. *.example.com).*     
+**Included URLs (OPTIMIZE)** - Includes a set of URLs in the **OPTIMIZE** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. *.example.com).     
 
     "included_urls_optimize": [
       "www.foo.com",
@@ -180,7 +180,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
       "*.test.com"
     ] 
  
-***Included URLs (DEFAULT)** - Includes a set of URLs in the **DEFAULT** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. *.example.com).*     
+**Included URLs (DEFAULT)* - Includes a set of URLs in the **DEFAULT** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. *.example.com).*     
 
     "included_urls_default": [
       "www.foo.com",
@@ -188,7 +188,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
       "*.test.com"
     ] 
 
-***Included URLs (ALLOW)** - Includes a set of URLs in the **ALLOW** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. *.example.com).*     
+**Included URLs (ALLOW)* - Includes a set of URLs in the **ALLOW** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. *.example.com).*     
 
     "included_urls_allow": [
       "www.foo.com",
