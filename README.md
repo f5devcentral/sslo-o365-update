@@ -20,11 +20,11 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 
   - Run the script with one of the following install options. Note that the install options create or replace an existing configuration, but **will not** by itself initiate an O365 URL fetch. To force a fetch on install, include the `--force` option.
 
-  - `python sslo_o365_update.py --install`  -- this option installs with the default configuration.
+    - `python sslo_o365_update.py --install`  -- this option installs with the default configuration.
 
-  - `python sslo_o365_update.py --install --config <JSON string>`  -- this option installs with a configuration passed in via serialized JSON string. Any attributes not defined will take default values.
+    - `python sslo_o365_update.py --install --config <JSON string>`  -- this option installs with a configuration passed in via serialized JSON string. Any attributes not defined will take default values.
 
-  - `python sslo_o365_update.py --install --configfile <JSON file>`  -- this option installs with a configuration passed in via JSON file. Any attributes not defined will take default values.
+    - `python sslo_o365_update.py --install --configfile <JSON file>`  -- this option installs with a configuration passed in via JSON file. Any attributes not defined will take default values.
   
 </details>
 
