@@ -39,11 +39,11 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   
     `--install --config '{"endpoint": "Worldwide"}'`
   
-  To change the schedule frequency (periods):
+    To change the schedule frequency (periods):
   
     `--install --config '{"schedule":{"periods":"monthly"}}'`
   
-  Anything not specifically defined will take the default values. See "default configuration" below.
+    Anything not specifically defined will take the default values. See "default configuration" below.
   
 </details>
 
