@@ -15,7 +15,7 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 <summary><b>How to install</b></summary>
 - Download the script onto the F5 BIG-IP:
 
-  `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.6/sslo_o365_update.py -o sslo_o365_update.py`
+    `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.6/sslo_o365_update.py -o sslo_o365_update.py`
 
 - Run the script with one of the following install options. Note that the install options create or replace an existing configuration, but **will not** by itself initiate an O365 URL fetch. To force a fetch on install, include the `--force` option.
 
