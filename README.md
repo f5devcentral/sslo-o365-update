@@ -119,12 +119,12 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 ### The configuration environment
 The installed script creates a working directory (default: /shared/o365), a configuration (iFile) json file, and scheduler. The configuration json file controls the various settings of the script.
 
-
+<br />
 **Endpoint** - Microsoft Web Service Customer endpoints (ENABLE ONLY ONE ENDPOINT). These are the set of URLs defined by customer endpoints as described here: https://docs.microsoft.com/en-us/office365/enterprise/urls-and-ip-address-ranges. Valid values are **"Worldwide"**, **"USGovDoD"**, **"USGovGCCHigh"**, **"China"**, **"Germany"**.
 
     "endpoint": "Worldwide"
 
-
+<br />
 **O365 "Service Areas"** - O365 endpoints to consume, as described here: https://docs.microsoft.com/en-us/office365/enterprise/urls-and-ip-address-ranges. The "common" service area should remain enabled as it contains the bulk of the URLs.
 
     "service_areas":{
@@ -134,7 +134,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
         "skype": True|False            -> Skype for Business and Microsoft Teams
     }
 
-
+<br />
 **Outputs** - O365 Record objects to create   
 
     "outputs":{
@@ -143,7 +143,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
         "ip_datagroups":  True|False   -> Create IPv4 data groups
     }
 
-
+<br />
 **O365 Categories** - create a single URL data set, and/or separate data sets for O365 Optimize/Default/Allow categories. The categories and recommended actions for each is described here: https://docs.microsoft.com/en-us/microsoft-365/enterprise/microsoft-365-network-connectivity-principles?view=o365-worldwide#BKMK_Categories
 
     "o365_categories":{                  
@@ -153,53 +153,58 @@ The installed script creates a working directory (default: /shared/o365), a conf
         "allow": True|False            -> Create a data set containing O365 "Default" category URLs
     }
 
-
+<br />
 **Required O365 endpoints to import** - O365 required endpoints or all endpoints. Importing all endpoints includes non-O365 URLs that one may not want to bypass (ex. www.youtube.com). It is recommended to leave this enabled/true (only download required URLs).
 
     "only_required": True|False        -> false=import all URLs, true=Office 365 required only URLs
 
-
+<br />
 **Excluded URLs** - (URL pattern matching is supported). Provide URLs in list format - ex. ["m.facebook.com", ".itunes.apple.com", "bit.ly"]. Even with "only_required" enabled, some non-Microsoft URLs are still included, mostly Certificate Authorities. The default settings include the set of CA URLs to exclude, but additional URLs can be added to this list as required. The list supports "ends-with" pattern matching.
 
     "excluded_urls": []
 
-
+<br />
 **Included URLs (ALL)** - Includes a set of URLs in the **ALL** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. \*.example.com).     
 
     "included_urls_all": [
       "www.foo.com",
       "www.bar.com",
-      "\*.test.com"
+      "*.test.com"
     ] 
 
+<br />  
 **Included URLs (OPTIMIZE)** - Includes a set of URLs in the **OPTIMIZE** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. \*.example.com).     
 
     "included_urls_optimize": [
       "www.foo.com",
       "www.bar.com",
-      "\*.test.com"
+      "*.test.com"
     ] 
- 
-**Included URLs (DEFAULT)* - Includes a set of URLs in the **DEFAULT** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. \*.example.com).*     
+
+<br />
+**Included URLs (DEFAULT)** - Includes a set of URLs in the **DEFAULT** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. \*.example.com).*     
 
     "included_urls_default": [
       "www.foo.com",
       "www.bar.com",
-      "\*.test.com"
+      "*.test.com"
     ] 
 
-**Included URLs (ALLOW)* - Includes a set of URLs in the **ALLOW** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. \*.example.com).     
+<br />
+**Included URLs (ALLOW)** - Includes a set of URLs in the **ALLOW** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. \*.example.com).     
 
     "included_urls_allow": [
       "www.foo.com",
       "www.bar.com",
-      "\*.test.com"
+      "*.test.com"
     ] 
-  
+
+<br />
 **Excluded IPs** - (IP must be exact match to IP as it exists in JSON record - IP/CIDR mask cannot be modified). Provide IPs in list format - ex. ["191.234.140.0/22", "2620:1ec:a92::152/128"].
 
     "excluded_ips": [] 
 
+<br />
 **System-level configuration settings**
 
     "system":{
@@ -222,6 +227,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
    
 ---
 
+<br />
 **Default configuration**
 ```json
 {
