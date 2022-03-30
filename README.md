@@ -120,12 +120,12 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 The installed script creates a working directory (default: /shared/o365), a configuration (iFile) json file, and scheduler. The configuration json file controls the various settings of the script.
 
 
-***Endpoint** - Microsoft Web Service Customer endpoints (ENABLE ONLY ONE ENDPOINT). These are the set of URLs defined by customer endpoints as described here: https://docs.microsoft.com/en-us/office365/enterprise/urls-and-ip-address-ranges. Valid values are **"Worldwide"**, **"USGovDoD"**, **"USGovGCCHigh"**, **"China"**, **"Germany"**.*
+**Endpoint** - Microsoft Web Service Customer endpoints (ENABLE ONLY ONE ENDPOINT). These are the set of URLs defined by customer endpoints as described here: https://docs.microsoft.com/en-us/office365/enterprise/urls-and-ip-address-ranges. Valid values are **"Worldwide"**, **"USGovDoD"**, **"USGovGCCHigh"**, **"China"**, **"Germany"**.
 
     "endpoint": "Worldwide"
 
 
-***O365 "Service Areas"** - O365 endpoints to consume, as described here: https://docs.microsoft.com/en-us/office365/enterprise/urls-and-ip-address-ranges. The "common" service area should remain enabled as it contains the bulk of the URLs.*
+**O365 "Service Areas"** - O365 endpoints to consume, as described here: https://docs.microsoft.com/en-us/office365/enterprise/urls-and-ip-address-ranges. The "common" service area should remain enabled as it contains the bulk of the URLs.
 
     "service_areas":{
         "common": True|False           -> Microsoft 365 Common and Office Online
@@ -135,7 +135,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     }
 
 
-***Outputs** - O365 Record objects to create*    
+**Outputs** - O365 Record objects to create   
 
     "outputs":{
         "url_categories": True|False   -> Create URL categories
@@ -144,7 +144,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     }
 
 
-***O365 Categories** - create a single URL data set, and/or separate data sets for O365 Optimize/Default/Allow categories. The categories and recommended actions for each is described here: https://docs.microsoft.com/en-us/microsoft-365/enterprise/microsoft-365-network-connectivity-principles?view=o365-worldwide#BKMK_Categories*
+**O365 Categories** - create a single URL data set, and/or separate data sets for O365 Optimize/Default/Allow categories. The categories and recommended actions for each is described here: https://docs.microsoft.com/en-us/microsoft-365/enterprise/microsoft-365-network-connectivity-principles?view=o365-worldwide#BKMK_Categories
 
     "o365_categories":{                  
         "all": True|False              -> Create a single date set containing all URLs (all categories)
@@ -154,12 +154,12 @@ The installed script creates a working directory (default: /shared/o365), a conf
     }
 
 
-***Required O365 endpoints to import** - O365 required endpoints or all endpoints. Importing all endpoints includes non-O365 URLs that one may not want to bypass (ex. www.youtube.com). It is recommended to leave this enabled/true (only download required URLs).*
+**Required O365 endpoints to import** - O365 required endpoints or all endpoints. Importing all endpoints includes non-O365 URLs that one may not want to bypass (ex. www.youtube.com). It is recommended to leave this enabled/true (only download required URLs).
 
     "only_required": True|False        -> false=import all URLs, true=Office 365 required only URLs
 
 
-***Excluded URLs** - (URL pattern matching is supported). Provide URLs in list format - ex. ["m.facebook.com", ".itunes.apple.com", "bit.ly"]. Even with "only_required" enabled, some non-Microsoft URLs are still included, mostly Certificate Authorities. The default settings include the set of CA URLs to exclude, but additional URLs can be added to this list as required. The list supports "ends-with" pattern matching.*
+**Excluded URLs** - (URL pattern matching is supported). Provide URLs in list format - ex. ["m.facebook.com", ".itunes.apple.com", "bit.ly"]. Even with "only_required" enabled, some non-Microsoft URLs are still included, mostly Certificate Authorities. The default settings include the set of CA URLs to exclude, but additional URLs can be added to this list as required. The list supports "ends-with" pattern matching.
 
     "excluded_urls": []
 
@@ -196,11 +196,11 @@ The installed script creates a working directory (default: /shared/o365), a conf
       "*.test.com"
     ] 
   
-***Excluded IPs** - (IP must be exact match to IP as it exists in JSON record - IP/CIDR mask cannot be modified). Provide IPs in list format - ex. ["191.234.140.0/22", "2620:1ec:a92::152/128"].*
+**Excluded IPs** - (IP must be exact match to IP as it exists in JSON record - IP/CIDR mask cannot be modified). Provide IPs in list format - ex. ["191.234.140.0/22", "2620:1ec:a92::152/128"].
 
     "excluded_ips": [] 
 
-***System-level configuration settings***
+**System-level configuration settings**
 
     "system":{
         "log_level": 1                       -> 0 = no logging, 1 = normal logging, 2 = verbose logging
@@ -210,7 +210,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
         "retry_delay": 300                   -> Delay between attempts
     }
    
-***System-level configuration settings***
+**System-level configuration settings**
 
     "schedule":{
         "periods":"none"                     -> The period, "monthly", "weekly", "daily", or "none" to run the script
