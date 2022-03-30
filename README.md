@@ -164,6 +164,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "only_required": True|False        -> false=import all URLs, true=Office 365 required only URLs
 
 <br />
+  
 **Excluded URLs** - (URL pattern matching is supported). Provide URLs in list format - ex. ["m.facebook.com", ".itunes.apple.com", "bit.ly"]. Even with "only_required" enabled, some non-Microsoft URLs are still included, mostly Certificate Authorities. The default settings include the set of CA URLs to exclude, but additional URLs can be added to this list as required. The list supports "ends-with" pattern matching.
 
     "excluded_urls": []
