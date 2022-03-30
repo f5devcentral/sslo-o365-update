@@ -56,8 +56,6 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 
     `python sslo_o365_update.py --install --force`
   
-    <br />
-  
     `python sslo_o365_update.py --force`
   
 </details>  
