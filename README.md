@@ -169,7 +169,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "included_urls_all": [
       "www.foo.com",
       "www.bar.com",
-      "*.test.com"
+      "\*.test.com"
     ] 
 
 **Included URLs (OPTIMIZE)** - Includes a set of URLs in the **OPTIMIZE** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. \*.example.com).     
@@ -177,7 +177,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "included_urls_optimize": [
       "www.foo.com",
       "www.bar.com",
-      "*.test.com"
+      "\*.test.com"
     ] 
  
 **Included URLs (DEFAULT)* - Includes a set of URLs in the **DEFAULT** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. \*.example.com).*     
@@ -185,7 +185,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "included_urls_default": [
       "www.foo.com",
       "www.bar.com",
-      "*.test.com"
+      "\*.test.com"
     ] 
 
 **Included URLs (ALLOW)* - Includes a set of URLs in the **ALLOW** category. The URL can either be an exact match (ex. www.example.com), or start with a wildcard (ex. \*.example.com).     
@@ -193,7 +193,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "included_urls_allow": [
       "www.foo.com",
       "www.bar.com",
-      "*.test.com"
+      "\*.test.com"
     ] 
   
 **Excluded IPs** - (IP must be exact match to IP as it exists in JSON record - IP/CIDR mask cannot be modified). Provide IPs in list format - ex. ["191.234.140.0/22", "2620:1ec:a92::152/128"].
