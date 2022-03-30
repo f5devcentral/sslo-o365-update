@@ -13,6 +13,7 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 
 <details>
 <summary><b>How to install</b></summary>
+  
   - Download the script onto the F5 BIG-IP:
 
     `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.6/sslo_o365_update.py -o sslo_o365_update.py`
@@ -23,7 +24,8 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 
   - `python sslo_o365_update.py --install --config <JSON string>`  -- this option installs with a configuration passed in via serialized JSON string. Any attributes not defined will take default values.
 
-  - `python sslo_o365_update.py --install --configfile <JSON file>`  -- this option installs with a configuration passed in via JSON file. Any attributes not defined will take default values.  
+  - `python sslo_o365_update.py --install --configfile <JSON file>`  -- this option installs with a configuration passed in via JSON file. Any attributes not defined will take default values.
+  
 </details>
 
   
