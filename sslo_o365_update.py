@@ -2,17 +2,20 @@
 # -*- coding: utf-8 -*-
 # O365 URL/IP update automation for BIG-IP
 
-version = "7.2.7"
+version = "7.3.0"
 
-# Last Modified: March 2022
+# Last Modified: June 2022
 # Update author: Kevin Stewart, Sr. SSA F5 Networks
+# Contributors: SSLO product engineering
 # Contributors: Regan Anderson, Brett Smith, F5 Networks
 # Original author: Makoto Omura, F5 Networks Japan G.K.
 #
 # >>> NOTE: THIS VERSION OF THE OFFICE 365 SCRIPT IS SUPPORTED BY SSL ORCHESTRATOR 5.0 OR HIGHER <<<
 #
 # Updated for SSL Orchestrator by Kevin Stewart, SSA, F5 Networks
-# Update 20220330 - to enable separate allow, optimize, default, and all URL include blocks
+# Update 20220613 - to enable hash-based change detection
+# Update 20220504 - to enable URL category search feature
+# Update 20220412 - to enable separate allow, optimize, default, and all URL include blocks
 # Update 20220106 - to make the script compatible with python2 and python3 with platform check
 # Update 20211231 - to make the script compatible with python3
 # Update 20211119 - to update messages based on doc team review
@@ -128,8 +131,13 @@ version = "7.2.7"
 #     "excluded_urls": []
 #
 #     Included URLs (URL must be exact match to URL as it exists in JSON record - pattern matching not supported)
-#     Provide URLs in list format - ex. ["m.facebook.com", ".itunes.apple.com", "bit.ly"]
-#     "included_urls": []
+#     Provide URLs in list format for each O365 category- ex. ["m.facebook.com", ".itunes.apple.com", "bit.ly"]
+#     "included_urls": {
+#        "all" :  [],
+#        "optimized" : [],
+#        "default" : [],
+#        "allow" : []
+#       }
 #
 #     Excluded IPs (IP must be exact match to IP as it exists in JSON record - IP/CIDR mask cannot be modified)
 #     Provide IPs in list format - ex. ["191.234.140.0/22", "2620:1ec:a92::152/128"]
@@ -165,7 +173,7 @@ version = "7.2.7"
 # further testing or modification.
 #-----------------------------------------------------------------------
 
-import platform, fnmatch, uuid, os, pwd, re, json, time, datetime, sys, argparse, copy, ssl
+import platform, fnmatch, uuid, os, pwd, re, json, time, datetime, sys, argparse, copy, ssl, hashlib
 
 if platform.python_version().startswith("2."):
     import commands as shell
@@ -213,10 +221,12 @@ json_config_data = {
         ".public-trust.com",
         "platform.linkedin.com"
     ],
-    "included_urls_allow": [],
-    "included_urls_optimize": [],
-    "included_urls_default": [],
-    "included_urls_all": [],
+    "included_urls": {
+        "all": [],
+        "optimized": [],
+        "default": [],
+        "allow": []
+    },
     "excluded_ips": [],
     "system": {
         "log_level": 1,
@@ -231,6 +241,15 @@ json_config_data = {
         "run_time":"04:00",
         "start_date":"",
         "start_time":""
+    },
+    "help": "If the Office365 configuration is deleted from the command line using the full_uninstall feature of the Python script and created again, the URL Category IDs will change. Therefore, if the SSL Orchestrator security policy uses any of these categories, the policy will need to be redeployed.",
+    "status":{
+        "description":"",
+        "last_run":"",
+        "next_run":"",
+        "last_hash_includedUrls" : {},
+        "last_hash_excludedUrls" : "",
+        "last_hash_excludedIPs" : ""
     }
 }
 
@@ -279,7 +298,7 @@ class o365UrlManagement:
         self.only_required = ""
         self.excluded_urls = ""
         self.included_urls_allow = ""
-        self.included_urls_optimize = ""
+        self.included_urls_optimized = ""
         self.included_urls_default = ""
         self.included_urls_all = ""
         self.excluded_ips = ""
@@ -336,8 +355,8 @@ class o365UrlManagement:
     ##      self.event_log(2, "VERSION request to MS web service was successful.")
     ##-----------------------------------------------------------------------
     def event_log(self, lev, msg):
-        ## For event logs 1 -> warning, 2 -> notice
-        level = "warn" if lev == 1 else "notice"
+        ## For event logs 1 -> error, 2 -> notice
+        level = "error" if lev == 1 else "notice"
 
         ## local1 logs to /var/log/apm, and the SSLO product subset is C4.
         ## Use 1000 for log msg id to not collide with log messages on BIGIP
@@ -361,6 +380,7 @@ class o365UrlManagement:
         print("--config CONFIG              -> Used with --install. Provide alternate JSON configuration information from a serialized JSON string object.")
         print("--config_file CONFIG_FILE    -> Used with --install. Provide alternate JSON configuration information from a JSON file.\n")
         print("--printconfig                -> Show the running configuration.\n")
+        print("--search                     -> Search the Office365 URL categories.\n")
 
         print("Examples:")
         print("Install with default configuration           ->  python " + os.path.basename(__file__) + " --install")
@@ -369,7 +389,8 @@ class o365UrlManagement:
         print("Install and force immediate URL update       ->  python " + os.path.basename(__file__) + " --install --force")
         print("Force an update                              ->  python " + os.path.basename(__file__) + " --force")
         print("Uninstall but keep categories/datagroups     ->  python " + os.path.basename(__file__) + " --uninstall")
-        print("Uninstall and remove categories/datagroups   ->  python " + os.path.basename(__file__) + " --full_uninstall\n\n")
+        print("Uninstall and remove categories/datagroups   ->  python " + os.path.basename(__file__) + " --full_uninstall")
+        print("Search for a URL in the Office365 categories ->  python " + os.path.basename(__file__) + " --search https://smtp.office365.com\n\n")
         sys.exit(0)
 
 
@@ -418,10 +439,10 @@ class o365UrlManagement:
                 self.o365_categories_allow       = self.config_data["o365_categories"]["allow"]
                 self.only_required               = self.config_data["only_required"]
                 self.excluded_urls               = self.config_data["excluded_urls"]
-                self.included_urls_allow         = self.config_data["included_urls_allow"]
-                self.included_urls_optimize      = self.config_data["included_urls_optimize"]
-                self.included_urls_default       = self.config_data["included_urls_default"]
-                self.included_urls_all           = self.config_data["included_urls_all"]
+                self.included_urls_allow         = self.config_data["included_urls"]["allow"]
+                self.included_urls_optimized     = self.config_data["included_urls"]["optimized"]
+                self.included_urls_default       = self.config_data["included_urls"]["default"]
+                self.included_urls_all           = self.config_data["included_urls"]["all"]
                 self.excluded_ips                = self.config_data["excluded_ips"]
                 self.log_level                   = self.config_data["system"]["log_level"]
                 self.ca_bundle                   = self.config_data["system"]["ca_bundle"]
@@ -434,6 +455,7 @@ class o365UrlManagement:
                 self.schedule_run_time           = self.config_data["schedule"]["run_time"]
                 self.schedule_start_date         = self.config_data["schedule"]["start_date"]
                 self.schedule_start_time         = self.config_data["schedule"]["start_time"]
+                self.status                      = self.config_data["status"]
 
             except:
                 sys.stderr.write("\nERROR: It appears the JSON configuration file is either missing or corrupt. Aborting (1001).\n[help-info] Run the script again with the --install option to repair\n.")
@@ -447,7 +469,7 @@ class o365UrlManagement:
     ##-----------------------------------------------------------------------
     ## Show running configuration function
     ##  Purpose: prints the running configuration to stdout
-    ##  Prameters: none
+    ##  Parmeters: none
     ##-----------------------------------------------------------------------
     def print_config(self):
         self.get_config()
@@ -455,6 +477,117 @@ class o365UrlManagement:
         print(this_json)
         sys.exit(1)
 
+    
+    ##-----------------------------------------------------------------------
+    ## Search function
+    ##  Purpose: search for a URL in the Office365 categories
+    ##  Parmeters: URL (ex. https://smtp.office365.com)
+    ##-----------------------------------------------------------------------
+    def search(self, url):
+        CAT_ALL = "o365_update.app/Office_365_All(Managed)"
+        CAT_ALLOW = "o365_update.app/Office_365_Allow(Managed)" 
+        CAT_OPT = "o365_update.app/Office_365_Optimized(Managed)"
+        CAT_DEF = "o365_update.app/Office_365_Default(Managed)"
+
+        if not ((url.startswith("https://")) or (url.startswith("http://"))):
+            print("\nURL argument format must include protocol")
+            print("Example: python o365_lookup.py https://smtp.office365.com\n")
+            sys.exit(0)
+
+        found_list = []
+
+        ## ALL Search
+        result = shell.getoutput("tmsh -a list sys url-db url-category \"" + CAT_ALL + "\" urls | grep -E '\s+http.*' | sed -e 's/ //g;s/{//g;s/\\\//g'")
+        for x in result.splitlines():
+            pattern = x.rstrip("/")
+            match = fnmatch.fnmatch(url, pattern)
+            if (match):
+                found_list.append("Office_365_All(Managed):\t" + pattern)
+
+        ## ALLOW Search
+        result = shell.getoutput("tmsh -a list sys url-db url-category \"" + CAT_ALLOW + "\" urls | grep -E '\s+http.*' | sed -e 's/ //g;s/{//g;s/\\\//g'")
+        for x in result.splitlines():
+            pattern = x.rstrip("/")
+            match = fnmatch.fnmatch(url, pattern)
+            if (match):
+                found_list.append("Office_365_Allow(Managed):\t" + pattern)
+
+        ## OPT Search
+        result = shell.getoutput("tmsh -a list sys url-db url-category \"" + CAT_OPT + "\" urls | grep -E '\s+http.*' | sed -e 's/ //g;s/{//g;s/\\\//g'")
+        for x in result.splitlines():
+            pattern = x.rstrip("/")
+            match = fnmatch.fnmatch(url, pattern)
+            if (match):
+                found_list.append("Office_365_Optimized(Managed):\t" + pattern)
+
+        ## DEF Search
+        result = shell.getoutput("tmsh -a list sys url-db url-category \"" + CAT_DEF + "\" urls | grep -E '\s+http.*' | sed -e 's/ //g;s/{//g;s/\\\//g'")
+        for x in result.splitlines():
+            pattern = x.rstrip("/")
+            match = fnmatch.fnmatch(url, pattern)
+            if (match):
+                found_list.append("Office_365_Default(Managed):\t" + pattern)
+        
+        if (len(found_list) > 0):
+            print("\nThe following URL matches were discovered:\n") 
+            for found_url in found_list:
+                print(found_url)
+                
+            print("\n\n")
+
+        else:
+            print("\nNo URL matches were found\n")
+
+        sys.exit(1)
+
+
+    ##-----------------------------------------------------------------------
+    ## URL parser function
+    ##  Purpose: clean up an return URLs submitted in JSON config
+    ##      - no http://
+    ##      - no https://
+    ##      - no trailing /
+    ##      - no wildcards (*)
+    ##      - remove resulting duplicates
+    ##  Prameters: URL list
+    ##-----------------------------------------------------------------------
+    def url_parser(self, urllist):
+        urlscleaned = []
+        for url in urllist:
+            ## convert all to lowercase
+            this_url = url.lower()
+
+            ## test for http://www.foo.com => convert to www.foo.com
+            if this_url.startswith("http://"):
+                this_url = this_url.replace("http://","")
+
+            ## test for https://www.foo.com => convert to www.foo.com
+            if this_url.startswith("https://"):
+                this_url = this_url.replace("https://","")
+
+            ## test for and remove trailing /
+            if this_url.endswith("/"):
+                this_url = this_url[:-1]
+
+            ## remove any wildcards (*)
+            this_url = this_url.replace("*","")
+
+            urlscleaned.append(this_url)
+
+        ## de-duplicate and return the remaining list
+        urlsdeduped = list(set(urlscleaned))
+        return urlsdeduped
+
+
+    ##-----------------------------------------------------------------------
+    ## Hash function
+    ##  Purpose: get the hash of a supplied parameter and return the hash value
+    ##  Parameters:
+    ##      jsonstr     = supplied JSON configuration
+    ##-----------------------------------------------------------------------
+    def get_hashedValue(self, input):
+        input.sort()
+        return hashlib.md5(str(input).encode('utf-8')).hexdigest()
 
     ##-----------------------------------------------------------------------
     ## JSON update function
@@ -464,6 +597,38 @@ class o365UrlManagement:
     ##-----------------------------------------------------------------------
     def update_json(self, jsonstr):
         json_data = copy.deepcopy(json_config_data)
+
+        ##status
+        if "status" in jsonstr:
+            if "description" in jsonstr["status"]:
+                json_data["status"]["description"] = jsonstr["status"]["description"]
+            else:
+                json_data["status"]["description"] = ""
+
+            if "last_run" in jsonstr["status"]:
+                json_data["status"]["last_run"] = jsonstr["status"]["last_run"]
+            else:
+                json_data["status"]["last_run"] = ""
+
+            if "next_run" in jsonstr["status"]:
+                json_data["status"]["next_run"] = jsonstr["status"]["next_run"]
+            else:
+                json_data["status"]["next_run"] = ""
+
+            if "last_hash_includedUrls" in jsonstr["status"]:
+                json_data["status"]["last_hash_includedUrls"] = jsonstr["status"]["last_hash_includedUrls"]
+            else:
+                json_data["status"]["last_hash_includedUrls"] = {}
+
+            if "last_hash_excludedUrls" in jsonstr["status"]:
+                json_data["status"]["last_hash_excludedUrls"] = jsonstr["status"]["last_hash_excludedUrls"]
+            else:
+                json_data["status"]["last_hash_excludedUrls"] = ""
+
+            if "last_hash_excludedIPs" in jsonstr["status"]:
+                json_data["status"]["last_hash_excludedIPs"] = jsonstr["status"]["last_hash_excludedIPs"]
+            else:
+                json_data["status"]["last_hash_excludedIPs"] = ""
 
         ## endpoint
         if "endpoint" in jsonstr:
@@ -647,38 +812,29 @@ class o365UrlManagement:
 
         ## excluded_urls
         if "excluded_urls" in jsonstr:
-            json_data["excluded_urls"] = jsonstr["excluded_urls"]
+            json_data["excluded_urls"] = self.url_parser(jsonstr["excluded_urls"])
         else:
             ## Default []
             json_data["excluded_urls"] = []
 
-        ## included_urls_allow
-        if "included_urls_allow" in jsonstr:
-            json_data["included_urls_allow"] = jsonstr["included_urls_allow"]
+        ## included_urls
+        if "included_urls" in jsonstr:
+            #json_data["included_urls"] = jsonstr["included_urls"]
+            if "allow" in jsonstr["included_urls"]:
+                json_data["included_urls"]["allow"] = self.url_parser(jsonstr["included_urls"]["allow"])
+            if "optimized" in jsonstr["included_urls"]:
+                json_data["included_urls"]["optimized"] = self.url_parser(jsonstr["included_urls"]["optimized"])
+            if "default" in jsonstr["included_urls"]:
+                json_data["included_urls"]["default"] = self.url_parser(jsonstr["included_urls"]["default"])
+            if "all" in jsonstr["included_urls"]:
+                json_data["included_urls"]["all"] = self.url_parser(jsonstr["included_urls"]["all"])
         else:
             ## Default []
-            json_data["included_urls_allow"] = []
-
-        ## included_urls_optimize
-        if "included_urls_optimize" in jsonstr:
-            json_data["included_urls_optimize"] = jsonstr["included_urls_optimize"]
-        else:
-            ## Default []
-            json_data["included_urls_optimize"] = []
-
-        ## included_urls_default
-        if "included_urls_default" in jsonstr:
-            json_data["included_urls_default"] = jsonstr["included_urls_default"]
-        else:
-            ## Default []
-            json_data["included_urls_default"] = []
-
-        ## included_urls_all
-        if "included_urls_all" in jsonstr:
-            json_data["included_urls_all"] = jsonstr["included_urls_all"]
-        else:
-            ## Default []
-            json_data["included_urls_all"] = []
+            json_data["included_urls"] = {}
+            json_data["included_urls"]["allow"] = []
+            json_data["included_urls"]["optimized"] = []
+            json_data["included_urls"]["default"] = []
+            json_data["included_urls"]["all"] = []
 
         ## excluded_ips
         if "excluded_ips" in jsonstr:
@@ -897,7 +1053,7 @@ class o365UrlManagement:
     ##      datestr         = datetime string
     ##      reason          = message to insert
     ##-----------------------------------------------------------------------
-    def addLastRun(self, datestr, reason):
+    def addLastRun(self, datestr, reason, isHashedValuesChanged=False, updatedHashedValues={}):
         # Find all versions of the configuration iFile
         o365_config = ""
         entry_array = []
@@ -913,7 +1069,10 @@ class o365UrlManagement:
         f_content = f.read()
         f.close()
         config_data = json.loads(f_content)
-        config_data["status"] = {}
+        #if URl updates are successful and hashvalues are changed from last run then update these new hashed values in json
+        if isHashedValuesChanged:
+            config_data["status"] = updatedHashedValues
+
         config_data["status"]["last_run"] = str(datestr)
         config_data["status"]["description"] = reason
 
@@ -1138,69 +1297,6 @@ class o365UrlManagement:
 
 
     ##-----------------------------------------------------------------------
-    ## url_converter
-    ##  Purpose: takes the raw url list and converts to url category or datagroup string format
-    ##  Parameters: 
-    ##      url_list: list of raw URLs
-    ##      target: [category, datagroup] - determines output format
-    ##  Returns: new url list with formatted strings
-    ##-----------------------------------------------------------------------
-    def url_converter(self, url_list, target):
-        formatted_urls = []
-        if target == "category":
-            for url in url_list:
-                url = url.lower()
-                if url.startswith('*.'):
-                    ## example: *.example.com
-                    url_processed = re.sub('\*', '\\*', url)
-                    if url.endswith('/'):
-                        formatted_urls.append("urls add { \"https://" + url_processed + "\" { type glob-match } }")
-                        formatted_urls.append("urls add { \"http://" + url_processed + "\" { type glob-match } }")
-                    else:
-                        formatted_urls.append("urls add { \"https://" + url_processed + "/\" { type glob-match } }")
-                        formatted_urls.append("urls add { \"http://" + url_processed + "/\" { type glob-match } }")
-                elif url.startswith("http://*."):
-                    ## example: http://*.example.com or http://*.example.com/
-                    url_processed = re.sub('\*', '\\*', url)
-                    if url.endswith('/'):
-                        formatted_urls.append("urls add { \"" + url_processed + "\" { type glob-match } }")
-                    else:
-                        formatted_urls.append("urls add { \"" + url_processed + "/\" { type glob-match } }")
-                elif url.startswith("https://*."):
-                    ## example: https://*.example.com or https://*.example.com/
-                    url_processed = re.sub('\*', '\\*', url)
-                    if url.endswith('/'):
-                        formatted_urls.append("urls add { \"" + url_processed + "\" { type glob-match } }")
-                    else:
-                        formatted_urls.append("urls add { \"" + url_processed + "/\" { type glob-match } }")
-                elif url.startswith("http://"):
-                    ## example: http://www.example.com or http://www.example.com/
-                    if url.endswith('/'):
-                        formatted_urls.append("urls add { \"" + url + "\" { type exact-match } }")
-                    else:
-                        formatted_urls.append("urls add { \"" + url + "/\" { type exact-match } }")
-                elif url.startswith("https://"):
-                    ## example: https://www.example.com or https://www.example.com/
-                    if url.endswith('/'):
-                        formatted_urls.append("urls add { \"" + url + "\" { type exact-match } }")
-                    else:
-                        formatted_urls.append("urls add { \"" + url + "/\" { type exact-match } }")
-                else:
-                    ## example: www.example.com
-                    if url.endswith('/'):
-                        formatted_urls.append("urls add { \"https://" + url + "\" { type exact-match } }")
-                        formatted_urls.append("urls add { \"http://" + url + "\" { type exact-match } }")
-                    else:
-                        formatted_urls.append("urls add { \"https://" + url + "/\" { type exact-match } }")
-                        formatted_urls.append("urls add { \"http://" + url + "/\" { type exact-match } }")
-
-        elif target == "datagroup":
-            pass
-        
-        return formatted_urls
-
-
-    ##-----------------------------------------------------------------------
     ## Update O365 function
     ##  Purpose: main work function. Processes O365 URLs and updates URL categories and datagroups
     ##  Parameters: none
@@ -1362,8 +1458,8 @@ class o365UrlManagement:
 
             ms_o365_version_latest = ""
             for record in dict_o365_version:
-                if record.has_key('instance'):
-                    if record["instance"] == self.customer_endpoint and record.has_key("latest"):
+                if 'instance' in record :
+                    if record["instance"] == self.customer_endpoint and "latest" in record:
                         latest = record["latest"]
                         if re.match('[0-9]{10}', latest):
                             ms_o365_version_latest = latest
@@ -1375,16 +1471,48 @@ class o365UrlManagement:
             self.log(2, self.log_level, self.logdir, "Previous VERSION is " + ms_o365_version_previous)
             self.log(2, self.log_level, self.logdir, "Latest VERSION is " + ms_o365_version_latest)
 
-            if self.force_update:
-                self.log(1, self.log_level, self.logdir, "Command called with \"--force\" option. Manual update initiated.")
-                pass
-            elif ms_o365_version_latest == ms_o365_version_previous:
+            ## -----------------------------------------------------------------------
+            ## check the hash of excluded IPs and excluded urls to check if they are changed, if yes, run the schdule
+            ## -----------------------------------------------------------------------
+            currentHash_excludeUrls = self.get_hashedValue(self.excluded_urls)
+            currentHash_excludeIPs = self.get_hashedValue(self.excluded_ips)
+            isExcludedUrlsSame = (currentHash_excludeUrls == self.status["last_hash_excludedUrls"])
+            isExcludedIPsSame = (currentHash_excludeIPs == self.status["last_hash_excludedIPs"])
+
+            # included_urls hash comparison
+            currentHash_includedUrls = {}
+            currentHash_includedUrls["default"] = self.get_hashedValue(self.included_urls_default)
+            currentHash_includedUrls["all"] = self.get_hashedValue(self.included_urls_all)
+            currentHash_includedUrls["optimized"] = self.get_hashedValue(self.included_urls_optimized)
+            currentHash_includedUrls["allow"] = self.get_hashedValue(self.included_urls_allow)
+
+            lastHash_values = self.status["last_hash_includedUrls"]
+            if bool(lastHash_values) :
+                isIncludedUrlsSame = currentHash_includedUrls["default"] == lastHash_values["default"] and\
+                currentHash_includedUrls["all"] == lastHash_values["all"] and\
+                currentHash_includedUrls["allow"] == lastHash_values["allow"] and\
+                currentHash_includedUrls["optimized"] == lastHash_values["optimized"]
+            else:
+                isIncludedUrlsSame = False
+
+            isHashedValuesSame = isIncludedUrlsSame and isExcludedUrlsSame and isExcludedIPsSame
+            if not isHashedValuesSame:
+                self.status["last_hash_includedUrls"] = currentHash_includedUrls
+                self.status["last_hash_excludedUrls"] = currentHash_excludeUrls
+                self.status["last_hash_excludedIPs"] = currentHash_excludeIPs
+                updatedHashedValues = self.status
+
+            # If there is no change in included_url, excluded_url and excluded_ip after last run and guid is also same then no need to run the fetcha again
+            if ms_o365_version_latest == ms_o365_version_previous and isHashedValuesSame:
                 present = datetime.datetime.now()
                 self.log(1, self.log_level, self.logdir, "Latest MS O365 URL/IP Address list already exists: " + ms_o365_version_latest + ". Aborting at " + present.strftime("%Y-%m-%d %H:%M"))
                 self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "URLs exists - update bypassed")
                 sys.stderr.write("ERROR: Latest MS O365 URL/IP Address list already exists: " + ms_o365_version_latest + ". Aborting at " + present.strftime("%Y-%m-%d %H:%M") + "\n")
                 sys.exit(1)
 
+            elif self.force_update or isHashedValuesSame:
+                self.log(1, self.log_level, self.logdir, "Command called with \"--force\" option. Manual update initiated.")
+                pass
 
             ## -----------------------------------------------------------------------
             ## Request O365 endpoints list and store in dictionaries
@@ -1424,32 +1552,32 @@ class o365UrlManagement:
 
                         if self.output_url_categories or self.output_url_datagroups:
                             ## Append "urls" if existent in each record (full list)
-                            if self.o365_categories_all and dict_o365_record.has_key('urls'):
+                            if self.o365_categories_all and 'urls' in dict_o365_record:
                                 list_urls = list(dict_o365_record['urls'])
                                 for url in list_urls:
                                     list_urls_to_bypass.append(url)
 
                             # Append "optimized" URLs if required (optimized list)
-                            if self.o365_categories_optimize and dict_o365_record.has_key('urls') and dict_o365_record.has_key('category') and dict_o365_record['category'] == "Optimize":
+                            if self.o365_categories_optimize and 'urls' in dict_o365_record and 'category' in dict_o365_record and dict_o365_record['category'] == "Optimize":
                                 list_optimized_urls = list(dict_o365_record['urls'])
                                 for url in list_optimized_urls:
                                     list_optimized_urls_to_bypass.append(url)
 
                             # Append "default" URLs if required (default list)
-                            if self.o365_categories_default and dict_o365_record.has_key('urls')and dict_o365_record.has_key('category') and dict_o365_record['category'] == "Default":
+                            if self.o365_categories_default and 'urls' in dict_o365_record and 'category' in dict_o365_record and dict_o365_record['category'] == "Default":
                                 list_default_urls = list(dict_o365_record['urls'])
                                 for url in list_default_urls:
                                     list_default_urls_to_bypass.append(url)
 
                             # Append "allow" URLs if required (allow list)
-                            if self.o365_categories_allow and dict_o365_record.has_key('urls')and dict_o365_record.has_key('category') and dict_o365_record['category'] == "Allow":
+                            if self.o365_categories_allow and 'urls' in dict_o365_record and 'category' in dict_o365_record and dict_o365_record['category'] == "Allow":
                                 list_allow_urls = list(dict_o365_record['urls'])
                                 for url in list_allow_urls:
                                     list_allow_urls_to_bypass.append(url)
 
                         if self.output_ip_datagroups:
                             # Append "ips" if existent in each record
-                            if dict_o365_record.has_key('ips'):
+                            if 'ips' in dict_o365_record:
                                 list_ips = list(dict_o365_record['ips'])
                                 for ip in list_ips:
                                     if re.match('^.+:', ip):
@@ -1466,8 +1594,8 @@ class o365UrlManagement:
                 for url in self.included_urls_all:
                     list_urls_to_bypass.append(url)
 
-                # Append included_urls_optimize
-                for url in self.included_urls_optimize:
+                # Append included_urls_optimized
+                for url in self.included_urls_optimized:
                     list_optimized_urls_to_bypass.append(url)
 
                 # Append included_urls_default
@@ -1578,7 +1706,7 @@ class o365UrlManagement:
 
             present = datetime.datetime.now()
             self.log(1, self.log_level, self.logdir, "Completed O365 URL/IP address update process (force update: " + forcebool + "). Last run at: " + present.strftime("%Y-%m-%d %H:%M"))
-            self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "O365 URLs are updated successfully.")
+            self.addLastRun(present.strftime("%Y-%m-%d %H:%M"), "O365 URLs are updated successfully.", not isHashedValuesSame, updatedHashedValues)
             print("[force-success]O365 URLs/IP Addresses are updated successfully.")
 
 
@@ -1734,7 +1862,16 @@ class o365UrlManagement:
         # Delete the configuration iFile
         result = shell.getoutput("tmsh -a delete sys file ifile o365_update.app/o365_config.json")
         print("..Configuration iFile deleted")
-
+        # Get a list of all the file paths that ends with .txt from in specified directory
+        fileList = os.listdir('/config/filestore/files_d/Common_d/ifile_d/')
+        pattern = "*o365_config.json*"
+        # Iterate over the list of filepaths & remove each file.
+        for entry in fileList:
+            if fnmatch.fnmatch(entry, pattern):
+                try:
+                    os.remove('/config/filestore/files_d/Common_d/ifile_d/' + entry)
+                except:
+                    print("Error while deleting file : ", filePath)
         # Delete working directory files
         try:
             os.remove(self.work_directory + "/guid.txt")
@@ -1785,6 +1922,7 @@ class o365UrlManagement:
             # Delete the application service
             result = shell.getoutput("tmsh -a delete sys application service o365_update.app/o365_update")
             print("..Application service deleted")
+            print("If the Office365 configuration is deleted from the command line using the full_uninstall feature of the Python script and created again, the URL Category IDs will change. Therefore, if the SSL Orchestrator security policy uses any of these categories, the policy will need to be redeployed.")
             print("[success-info] ..Full uninstall complete. All unassigned data groups and URL categories have also been deleted.\n\n")
 
 
@@ -1808,6 +1946,7 @@ def main():
     group.add_argument("--full_uninstall", action='store_const', const='none', help = "Unintall the script. Remove everything.")
     #group.add_argument("--force", action='store_const', const='none', help = "Force an update.")
     group.add_argument("--printconfig", action='store_const', const='none', help = "Show the running configuration.")
+    group.add_argument("--search", help = "Search the Office365 URL categories.")
 
     # Add mutually-exclusive config/configfile options
     group1 = parser.add_mutually_exclusive_group()
@@ -1833,6 +1972,9 @@ def main():
     if args.force:
         o365.force_update = True
 
+    if args.search:
+        o365.search(args.search)
+
     # --install/--uninstall arguments
     if args.install:
         o365.script_install()
@@ -1844,6 +1986,8 @@ def main():
         o365.show_help()
     elif args.printconfig:
         o365.print_config()
+    elif args.search:
+        o365.search()
     else:
         # No argument - run utility
         o365.update_o365()
