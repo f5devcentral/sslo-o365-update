@@ -302,6 +302,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
 ---
 
 **Improvements**
-- Update 7.2.7 - to enable separate allow, optimize, default, and all URL include blocks 
-- Update 7.2.6 - to support additional enhancements
-   - Updated to make the script compatible with python2 and python3 with platform check
+- Update to enable hash-based change detection
+- Update to enable URL category search feature
+- Update to enable separate allow, optimize, default, and all URL include blocks
+- Update to make the script compatible with python2 and python3 with platform check
