@@ -82,6 +82,13 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   
 </details>
 
+
+<details>
+<summary><b>How to search the Office365 categories</b></summary>
+  
+  - Run the script with the `--search` option and add the full URL to search (ex. `--search https://smtp.office365.com`)
+  
+</details>
   
   
 <details>
