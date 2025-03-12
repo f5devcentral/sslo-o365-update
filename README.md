@@ -48,7 +48,7 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 
 <details>
 <summary><b>Working with endpoints</b></summary>
-
+<br />
 As of 8.0.0, the script supports download and management of multiple endpoints (ex. Worldwide, USGovDoD, Germany, etc.). Each endpoint configuration maintains separate state, update timing, and endpoint-prefixed URL categories and/or data groups (ex. worldwide_Office_365_Allow(Managed)). The installation process reads the intended endpoint from the supplied configuration (or defaults to "worldwide" if a configuration json is not supplied). All script options except for --install and --list now require an **--endpoint** option to specify the intended endpoint:
 
   | **Arguments**    | **Description**                                                                                                       |
@@ -100,7 +100,7 @@ As of 8.0.0, the script supports download and management of multiple endpoints (
 
   - Run the script with the `--full_uninstall` option with --endpoint. This will remove the configurtion file, scheduler, working directory files, URL categories, and datagroups.
 
-  `python sslo_o365_update.py --full_uninstall --endpoint worldwide`
+    `python sslo_o365_update.py --full_uninstall --endpoint worldwide`
   
 </details>
 
@@ -131,16 +131,16 @@ As of 8.0.0, the script supports download and management of multiple endpoints (
   
 <details>
 <summary><b>HA considerations</b></summary>  
-  
-  - Perform the install operations on both units in an HA environment and then sync. The script runs independently on each peer and will not trigger an out-of-sync indication when updates are made.
+<br />  
+Perform the install operations on both units in an HA environment and then sync. The script runs independently on each peer and will not trigger an out-of-sync indication when updates are made.
   
 </details>
   
 
 <details>
 <summary><b>Egress proxy considerations</b></summary>  
-  
-  - The script uses system outbound proxy settings (System : Configuration : Device : Upstream Proxy).
+<br />  
+The script uses system outbound proxy settings (System : Configuration : Device : Upstream Proxy).
   
 </details>
   
