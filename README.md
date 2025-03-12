@@ -1,14 +1,13 @@
 # F5 SSL Orchestrator Office 365 URL Update Script
-A small Python utility to download and maintain the dynamic set of Office 365 URLs as data groups and custom URL categories on the F5 BIG-IP, for use with SSL Orchestrator.
+A small python3 utility to download and maintain the dynamic set of Office 365 URLs as data groups and custom URL categories on the F5 BIG-IP, for use with SSL Orchestrator.
 
 [![Releases](https://img.shields.io/github/v/release/f5devcentral/sslo-o365-update.svg)](https://github.com/f5devcentral/sslo-o365-update/releases)
 
 ### Script version
-7.3.0
+8.0.0
 
 ### SSL Orchestrator version support
 This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
-
 
 
 <details>
@@ -20,14 +19,13 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 
   - Run the script with one of the following install options. Note that the install options create or replace an existing configuration, but **will not** by itself initiate an O365 URL fetch. To force a fetch on install, include the `--force` option.
 
-    - `python sslo_o365_update.py --install`  -- this option installs with the default configuration.
+    - `python3 sslo_o365_update.py --install`  -- this option installs with the default configuration.
 
-    - `python sslo_o365_update.py --install --config <JSON string>`  -- this option installs with a configuration passed in via serialized JSON string. Any attributes not defined will take default values.
+    - `python3 sslo_o365_update.py --install --config <JSON string>`  -- this option installs with a configuration passed in via serialized JSON string. Any attributes not defined will take default values.
 
-    - `python sslo_o365_update.py --install --configfile <JSON file>`  -- this option installs with a configuration passed in via JSON file. Any attributes not defined will take default values.
+    - `python3 sslo_o365_update.py --install --configfile <JSON file>`  -- this option installs with a configuration passed in via JSON file. Any attributes not defined will take default values.
   
 </details>
-
   
   
 <details>
@@ -47,19 +45,42 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   
 </details>
 
+
+<details>
+<summary><b>Working with endpoints</b></summary>
+
+As of 8.0.0, the script supports download and management of multiple endpoints (ex. Worldwide, USGovDoD, Germany, etc.). Each endpoint configuration maintains separate state, update timing, and endpoint-prefixed URL categories and/or data groups (ex. worldwide_Office_365_Allow(Managed)). The installation process reads the intended endpoint from the supplied configuration (or defaults to "worldwide" if a configuration json is not supplied). All script options except for --install and --list now require an **--endpoint** option to specify the intended endpoint:
+
+  | **Arguments**    | **Description**                                                                                                       |
+  |------------------|-----------------------------------------------------------------------------------------------------------------------|
+  | --list           | List all of the currently installed endpoints.                                                                        |
+  | --printconfig    | Prints the configuration of the supplied endpoint.                                                                    |
+  | --uninstall      | Uninstalls the configuration files and crontab for the supplied the endpoint.                                         |
+  | --full_uninstall | Uninstalls the configuration files, crontab, and all unused URL categories and data groups for the supplied endpoint. |
+  | --force          | Force an update on the supplied endpoint.                                                                             |
+  | (no arguments)   | Without any arguments, triggers an update but stops if the URLs have not changed. Required a supplied endpoint.       |
   
+</details>  
+
+
+<details>
+<summary><b>How to list the current endpoints</b></summary>
   
+  - Run the script with the `--list` option to display all of the currently configured endpoints.
+  
+    `python3 sslo_o365_update.py --list`
+  
+</details>
+
+
 <details>
 <summary><b>How to force an update</b></summary>
   
   - Run the script with the `--force` option, either during install to immediately force a URL fetch, or at any time.
-
-    `python sslo_o365_update.py --install --force`
   
-    `python sslo_o365_update.py --force`
+    `python3 sslo_o365_update.py --force --endpoint worldwide`
   
-</details>  
-
+</details>
   
   
 <details>
@@ -67,18 +88,19 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   
   - Run the script with the `--printconfig` option to display the running configuration.
 
-    `python sslo_o365_update.py --printconfig`
+    `python3 sslo_o365_update.py --printconfig --endpoint worldwide`
   
 </details>
 
-  
 
 <details>
 <summary><b>How to uninstall</b></summary>
   
-  - Run the script with the `--uninstall` option. This will remove the configuration file and scheduler. The URL categories, datagroups, and working directory will remain.
+  - Run the script with the `--uninstall` option with --endpoint. This will remove the configuration file and scheduler. The URL categories, datagroups, and working directory will remain.
 
-  - Run the script with the `--full_uninstall` option. This will remove the configurtion file, scheduler, working directory files, URL categories, and datagroups.
+  - Run the script with the `--full_uninstall` option with --endpoint. This will remove the configurtion file, scheduler, working directory files, URL categories, and datagroups.
+
+  `python sslo_o365_update.py --full_uninstall --endpoint worldwide`
   
 </details>
 
@@ -86,7 +108,9 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
 <details>
 <summary><b>How to search the Office365 categories</b></summary>
   
-  - Run the script with the `--search` option and add the full URL to search (ex. `--search https://smtp.office365.com`)
+  - Run the script with the `--search` option with --endpoint and add the full URL to search (ex. `--search https://smtp.office365.com`)
+
+    `python3 sslo_o365_update.py --endpoint worldwide --search https://graph.windows.net`
   
 </details>
   
@@ -96,14 +120,13 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   
   - Save the running config to a file:
 
-    `python sslo_o365_update.py --printconfig > config.json`
+    `python3 sslo_o365_update.py --printconfig --endpoint worldwide > config.json`
 
   - Install the new version and point to the config file:
 
-    `python sslo_o365_update_v7.2.7.py --install --configfile config.json`
+    `python3 sslo_o365_updat.py --install --configfile config.json`
   
 </details>
-
   
   
 <details>
@@ -229,7 +252,7 @@ The installed script creates a working directory (default: /shared/o365), a conf
     "system":{
         "log_level": 1                       -> 0 = no logging, 1 = normal logging, 2 = verbose logging
         "ca_bundle": "ca-bundle.crt"         -> The CA certificate bundle to use for validating the remote server certificate
-        "working_directory": "/shared/o365"  -> The working directory to install and run the script from
+        "working_directory": "/shared/o365"  -> The working directory to install and run the script from. Each defined endpoint will create a subfolder under this.
         "retry_attempts": 3                  -> Number of attempts to make if initial remote call fails
         "retry_delay": 300                   -> Delay between attempts
     }
@@ -309,7 +332,8 @@ The installed script creates a working directory (default: /shared/o365), a conf
 ---
 
 **Improvements**
+- Update to enable multiple endpoints
 - Update to enable hash-based change detection
 - Update to enable URL category search feature
 - Update to enable separate allow, optimize, default, and all URL include blocks
-- Update to make the script compatible with python2 and python3 with platform check
+- Update to make the script compatible with python and python3 with platform check
