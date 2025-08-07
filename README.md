@@ -15,7 +15,7 @@ This utility works on BIG-IP 14.1 and above, SSL Orchestrator 5.x and above.
   
   - Download the script onto the F5 BIG-IP:
 
-    `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/7.2.6/sslo_o365_update.py -o sslo_o365_update.py`
+    `curl -k https://raw.githubusercontent.com/f5devcentral/sslo-o365-update/8.0.0/sslo_o365_update.py -o sslo_o365_update.py`
 
   - Run the script with one of the following install options. Note that the install options create or replace an existing configuration, but **will not** by itself initiate an O365 URL fetch. To force a fetch on install, include the `--force` option.
 
@@ -160,10 +160,10 @@ The installed script creates a working directory (default: /shared/o365), a conf
 **O365 "Service Areas"** - O365 endpoints to consume, as described here: https://docs.microsoft.com/en-us/office365/enterprise/urls-and-ip-address-ranges. The "common" service area should remain enabled as it contains the bulk of the URLs.
 
     "service_areas":{
-        "common": True|False           -> Microsoft 365 Common and Office Online
-        "exchange": True|False         -> Exchange Online  
-        "sharepoint": True|False       -> SharePoint Online and OneDrive for Business
-        "skype": True|False            -> Skype for Business and Microsoft Teams
+        "common": true|false           -> Microsoft 365 Common and Office Online
+        "exchange": true|false         -> Exchange Online  
+        "sharepoint": true|false       -> SharePoint Online and OneDrive for Business
+        "skype": true|false            -> Skype for Business and Microsoft Teams
     }
 
 <br />
@@ -171,9 +171,9 @@ The installed script creates a working directory (default: /shared/o365), a conf
 **Outputs** - O365 Record objects to create   
 
     "outputs":{
-        "url_categories": True|False   -> Create URL categories
-        "url_datagroups": True|False   -> Create URL data groups
-        "ip_datagroups":  True|False   -> Create IPv4 data groups
+        "url_categories": true|false   -> Create URL categories
+        "url_datagroups": true|false   -> Create URL data groups
+        "ip_datagroups":  true|false   -> Create IPv4 data groups
     }
 
 <br />
@@ -181,17 +181,17 @@ The installed script creates a working directory (default: /shared/o365), a conf
 **O365 Categories** - create a single URL data set, and/or separate data sets for O365 Optimize/Default/Allow categories. The categories and recommended actions for each is described here: https://docs.microsoft.com/en-us/microsoft-365/enterprise/microsoft-365-network-connectivity-principles?view=o365-worldwide#BKMK_Categories
 
     "o365_categories":{                  
-        "all": True|False              -> Create a single date set containing all URLs (all categories)
-        "optimize: True|False          -> Create a data set containing O365 "Optimize" category URLs (note that the optimized URLs are in Exchange and "SharePoint service areas)
-        "default": True|False          -> Create a data set containing O365 "Allow" category URLs
-        "allow": True|False            -> Create a data set containing O365 "Default" category URLs
+        "all": true|false              -> Create a single date set containing all URLs (all categories)
+        "optimize: true|false          -> Create a data set containing O365 "Optimize" category URLs (note that the optimized URLs are in Exchange and "SharePoint service areas)
+        "default": true|false          -> Create a data set containing O365 "Allow" category URLs
+        "allow": true|false            -> Create a data set containing O365 "Default" category URLs
     }
 
 <br />
   
 **Required O365 endpoints to import** - O365 required endpoints or all endpoints. Importing all endpoints includes non-O365 URLs that one may not want to bypass (ex. www.youtube.com). It is recommended to leave this enabled/true (only download required URLs).
 
-    "only_required": True|False        -> false=import all URLs, true=Office 365 required only URLs
+    "only_required": true|false        -> false=import all URLs, true=Office 365 required only URLs
 
 <br />
   
@@ -274,24 +274,24 @@ The installed script creates a working directory (default: /shared/o365), a conf
 {
     "endpoint": "Worldwide",
     "service_areas": {
-        "common": True,
-        "exchange": True,
-        "sharepoint": True,
-        "skype": True
+        "common": true,
+        "exchange": true,
+        "sharepoint": true,
+        "skype": true
     },
     "outputs": {
-        "url_categories": True,
-        "url_datagroups": True,
-        "ip4_datagroups": True,
-        "ip6_datagroups": True
+        "url_categories": true,
+        "url_datagroups": true,
+        "ip4_datagroups": true,
+        "ip6_datagroups": true
     },
     "o365_categories": {
-        "all": True,
-        "optimize": True,
-        "default": True,
-        "allow": True
+        "all": true,
+        "optimize": true,
+        "default": true,
+        "allow": true
     },
-    "only_required": True,
+    "only_required": true,
     "excluded_urls": [
         ".symcd.com",
         ".symcb.com",
