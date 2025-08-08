@@ -13,6 +13,7 @@ version = "8.0.0"
 # >>> NOTE: THIS VERSION OF THE OFFICE 365 SCRIPT IS SUPPORTED BY SSL ORCHESTRATOR 5.0 OR HIGHER <<<
 #
 # Updated for SSL Orchestrator by Kevin Stewart, SSA, F5 Networks
+# Update 20250807 - to fix file operations during uninstall
 # Update 20250312 - to support updating with multiple endpoints (by Kevin Stewart)
 #   - Updated to add --endpoint option to be used with --uninstall, --full_uninstall, --printconfig, --force, and --search options
 #   - The install process creates categories and datagroups prefixed with the endpoint (ex. worldwide_Office365_Allow)
@@ -176,7 +177,7 @@ version = "8.0.0"
 # further testing or modification.
 #-----------------------------------------------------------------------
 
-import platform, fnmatch, uuid, os, pwd, re, json, time, datetime, sys, argparse, copy, ssl, hashlib
+import platform, fnmatch, uuid, os, pwd, re, json, time, datetime, sys, argparse, copy, ssl, hashlib, shutil
 
 if platform.python_version().startswith("2."):
     import commands as shell
@@ -1945,27 +1946,24 @@ class o365UrlManagement:
         # Delete the configuration iFile
         result = shell.getoutput("tmsh -a delete sys file ifile o365_update.app/" + endpoint + "_o365_config.json")
         print("..Configuration iFile deleted")
-        # Get a list of all the file paths that ends with .txt from in specified directory
-        fileList = os.listdir('/config/filestore/files_d/Common_d/ifile_d/')
-        pattern = "*" + endpoint + "_o365_config.json*"
-        # Iterate over the list of filepaths & remove each file.
-        for entry in fileList:
-            if fnmatch.fnmatch(entry, pattern):
-                try:
-                    os.remove('/config/filestore/files_d/Common_d/ifile_d/' + entry)
-                except:
-                    print("Error while deleting file : ", entry)
-        # Delete working directory files
-        try:
-            os.remove(self.work_directory + "/" + endpoint + "/guid.txt")
-        except:
-            pass
+        # Get a list of all the file paths that ends with .json from in specified directory
+        if os.path.isdir('/config/filestore/files_d/Common_d/ifile_d/'):
+            fileList = os.listdir('/config/filestore/files_d/Common_d/ifile_d/')
+            pattern = "*" + endpoint + "_o365_config.json*"
+            # Iterate over the list of filepaths & remove each file.
+            for entry in fileList:
+                if fnmatch.fnmatch(entry, pattern):
+                    try:
+                        os.remove('/config/filestore/files_d/Common_d/ifile_d/' + entry)
+                    except:
+                        print("Error while deleting file : ", entry)
 
+        # Delete working directory and files
         try:
-            os.remove(self.work_directory + "/" + endpoint + "/o365_version.txt")
+            shutil.rmtree(self.work_directory + "/" + endpoint)
         except:
             pass
-        print("..Configuration scratch files deleted")
+        print("..Endpoint scratch files and directory deleted")
 
         # Delete the cron config
         ## search /etc/cron.d/0hourly for matching (existing) line and replace
